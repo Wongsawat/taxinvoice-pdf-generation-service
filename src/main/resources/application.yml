@@ -25,26 +25,30 @@ spring:
     baseline-on-migrate: true
     locations: classpath:db/migration
 
-  kafka:
-    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
-    consumer:
-      group-id: taxinvoice-pdf-generation-service
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-    producer:
-      acks: all
-      retries: 3
-
   jackson:
     serialization:
       write-dates-as-timestamps: false
 
+# Apache Camel
+camel:
+  springboot:
+    name: taxinvoice-pdf-generation-camel
+    main-run-controller: true
+  component:
+    kafka:
+      brokers: ${KAFKA_BROKERS:localhost:9092}
+
 # Application-specific configuration
 app:
   kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumer:
+      group-id: taxinvoice-pdf-generation-service
     topics:
       xml-signed-tax-invoice: xml.signed.tax-invoice
-      pdf-generated-tax-invoice: pdf.generated.tax-invoice
+      pdf-generated: pdf.generated
+      pdf-signing-requested: pdf.signing.tax-invoice.requested
+      dlq: pdf.generation.tax-invoice.dlq
   pdf:
     storage:
       path: ${PDF_STORAGE_PATH:/var/documents/taxinvoices}
@@ -66,7 +70,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,camelroutes
   endpoint:
     health:
       show-details: always
@@ -79,5 +83,7 @@ logging:
   level:
     root: INFO
     com.wpanther.taxinvoice.pdf: DEBUG
+    org.apache.camel: INFO
+    org.apache.camel.component.kafka: DEBUG
     org.apache.fop: INFO
     org.apache.pdfbox: INFO

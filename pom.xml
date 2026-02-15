@@ -26,6 +26,7 @@
         <lombok.version>1.18.30</lombok.version>
         <flyway.version>10.10.0</flyway.version>
         <camel.version>4.14.4</camel.version>
+        <saga.commons.version>1.0.0-SNAPSHOT</saga.commons.version>
     </properties>
 
     <dependencyManagement>
@@ -166,6 +167,13 @@
         <dependency>
             <groupId>com.fasterxml.jackson.datatype</groupId>
             <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- Saga Commons for IntegrationEvent base class -->
+        <dependency>
+            <groupId>com.wpanther</groupId>
+            <artifactId>saga-commons</artifactId>
+            <version>${saga.commons.version}</version>
         </dependency>
 
         <!-- Micrometer for metrics -->

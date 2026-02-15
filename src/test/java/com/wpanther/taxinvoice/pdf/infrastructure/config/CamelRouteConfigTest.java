@@ -1,7 +1,10 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wpanther.taxinvoice.pdf.application.service.TaxInvoicePdfDocumentService;
+import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.domain.event.XmlSignedTaxInvoiceEvent;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,12 +34,13 @@ class CamelRouteConfigTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
+        objectMapper.registerModule(new JavaTimeModule());
         camelRouteConfig = new CamelRouteConfig(
                 documentService,
                 objectMapper,
                 "xml.signed.tax-invoice",
                 "pdf.generated",
-                "pdf.signing.tax-invoice.requested",
+                "pdf.signing.requested",
                 "pdf.generation.tax-invoice.dlq",
                 "localhost:9092",
                 "taxinvoice-pdf-generation-service"
@@ -78,7 +82,7 @@ class CamelRouteConfigTest {
         // Then
         assertThat(event).containsKeys(
                 "eventId", "eventType", "occurredAt", "version",
-                "documentId", "taxInvoiceId", "taxInvoiceNumber",
+                "documentId", "taxInvoiceId", "taxInvoiceNumber", "documentType",
                 "pdfDocumentId", "documentUrl", "documentPath",
                 "fileSize", "mimeType", "xmlEmbedded",
                 "correlationId", "generatedAt"
@@ -88,6 +92,7 @@ class CamelRouteConfigTest {
         assertThat(event.get("documentId")).isEqualTo("doc-123");
         assertThat(event.get("taxInvoiceId")).isEqualTo("tax-inv-001");
         assertThat(event.get("taxInvoiceNumber")).isEqualTo("TXINV-2024-001");
+        assertThat(event.get("documentType")).isEqualTo("TAX_INVOICE");
         assertThat(event.get("pdfDocumentId")).isEqualTo(documentId.toString());
         assertThat(event.get("fileSize")).isEqualTo(12345L);
         assertThat(event.get("xmlEmbedded")).isEqualTo(true);
@@ -156,5 +161,57 @@ class CamelRouteConfigTest {
 
         // Then
         assertThat(uri).isEqualTo("kafka:output-topic?brokers=localhost:9092");
+    }
+
+    @Test
+    @DisplayName("Should serialize and deserialize TaxInvoicePdfGeneratedEvent")
+    void testTaxInvoicePdfGeneratedEventSerialization() throws Exception {
+        // Given
+        TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
+                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "http://example.com/doc.pdf", 12345L, true, "corr-456"
+        );
+
+        // When
+        String json = objectMapper.writeValueAsString(event);
+
+        // Then
+        assertThat(json).contains("\"eventType\":\"pdf.generated.tax-invoice\"");
+        assertThat(json).contains("\"eventId\"");
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getOccurredAt()).isNotNull();
+        assertThat(event.getVersion()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Should deserialize XmlSignedTaxInvoiceEvent from JSON")
+    void testXmlSignedTaxInvoiceEventDeserialization() throws Exception {
+        // Given
+        String json = """
+            {
+                "eventId": "550e8400-e29b-41d4-a716-446655440000",
+                "occurredAt": "2024-01-15T10:30:00Z",
+                "eventType": "xml.signed.tax-invoice",
+                "version": 1,
+                "documentId": "doc-123",
+                "taxInvoiceId": "tax-inv-001",
+                "taxInvoiceNumber": "TXINV-2024-001",
+                "signedXmlContent": "<TaxInvoice>...</TaxInvoice>",
+                "taxInvoiceDataJson": "{}",
+                "correlationId": "corr-456"
+            }
+            """;
+
+        // When
+        XmlSignedTaxInvoiceEvent event = objectMapper.readValue(json, XmlSignedTaxInvoiceEvent.class);
+
+        // Then
+        assertThat(event.getEventId()).isEqualTo(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"));
+        assertThat(event.getDocumentId()).isEqualTo("doc-123");
+        assertThat(event.getTaxInvoiceId()).isEqualTo("tax-inv-001");
+        assertThat(event.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
+        assertThat(event.getSignedXmlContent()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
+        assertThat(event.getTaxInvoiceDataJson()).isEqualTo("{}");
+        assertThat(event.getCorrelationId()).isEqualTo("corr-456");
     }
 }

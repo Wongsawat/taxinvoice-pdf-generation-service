@@ -1,36 +1,50 @@
 package com.wpanther.taxinvoice.pdf.domain.event;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.wpanther.saga.domain.model.IntegrationEvent;
+import lombok.Getter;
+
 import java.time.Instant;
 import java.util.UUID;
 
-/**
- * Event published when a tax invoice PDF has been generated
- */
-public class TaxInvoicePdfGeneratedEvent {
+@Getter
+public class TaxInvoicePdfGeneratedEvent extends IntegrationEvent {
 
-    private final String eventId;
-    private final String eventType = "pdf.generated.tax-invoice";
-    private final Instant occurredAt;
-    private final int version = 1;
+    private static final String EVENT_TYPE = "pdf.generated.tax-invoice";
+
+    @JsonProperty("documentId")
     private final String documentId;
+
+    @JsonProperty("taxInvoiceId")
     private final String taxInvoiceId;
+
+    @JsonProperty("taxInvoiceNumber")
     private final String taxInvoiceNumber;
+
+    @JsonProperty("documentUrl")
     private final String documentUrl;
+
+    @JsonProperty("fileSize")
     private final long fileSize;
+
+    @JsonProperty("xmlEmbedded")
     private final boolean xmlEmbedded;
+
+    @JsonProperty("correlationId")
     private final String correlationId;
 
+    // Default constructor - calls super() for auto-generated metadata
     public TaxInvoicePdfGeneratedEvent(
-        String documentId,
-        String taxInvoiceId,
-        String taxInvoiceNumber,
-        String documentUrl,
-        long fileSize,
-        boolean xmlEmbedded,
-        String correlationId
+            String documentId,
+            String taxInvoiceId,
+            String taxInvoiceNumber,
+            String documentUrl,
+            long fileSize,
+            boolean xmlEmbedded,
+            String correlationId
     ) {
-        this.eventId = UUID.randomUUID().toString();
-        this.occurredAt = Instant.now();
+        super();
         this.documentId = documentId;
         this.taxInvoiceId = taxInvoiceId;
         this.taxInvoiceNumber = taxInvoiceNumber;
@@ -40,47 +54,33 @@ public class TaxInvoicePdfGeneratedEvent {
         this.correlationId = correlationId;
     }
 
-    public String getEventId() {
-        return eventId;
-    }
-
+    @Override
     public String getEventType() {
-        return eventType;
+        return EVENT_TYPE;
     }
 
-    public Instant getOccurredAt() {
-        return occurredAt;
-    }
-
-    public int getVersion() {
-        return version;
-    }
-
-    public String getDocumentId() {
-        return documentId;
-    }
-
-    public String getTaxInvoiceId() {
-        return taxInvoiceId;
-    }
-
-    public String getTaxInvoiceNumber() {
-        return taxInvoiceNumber;
-    }
-
-    public String getDocumentUrl() {
-        return documentUrl;
-    }
-
-    public long getFileSize() {
-        return fileSize;
-    }
-
-    public boolean isXmlEmbedded() {
-        return xmlEmbedded;
-    }
-
-    public String getCorrelationId() {
-        return correlationId;
+    // JsonCreator constructor for Kafka deserialization
+    @JsonCreator
+    public TaxInvoicePdfGeneratedEvent(
+            @JsonProperty("eventId") UUID eventId,
+            @JsonProperty("occurredAt") Instant occurredAt,
+            @JsonProperty("eventType") String eventType,
+            @JsonProperty("version") int version,
+            @JsonProperty("documentId") String documentId,
+            @JsonProperty("taxInvoiceId") String taxInvoiceId,
+            @JsonProperty("taxInvoiceNumber") String taxInvoiceNumber,
+            @JsonProperty("documentUrl") String documentUrl,
+            @JsonProperty("fileSize") long fileSize,
+            @JsonProperty("xmlEmbedded") boolean xmlEmbedded,
+            @JsonProperty("correlationId") String correlationId
+    ) {
+        super(eventId, occurredAt, eventType, version);
+        this.documentId = documentId;
+        this.taxInvoiceId = taxInvoiceId;
+        this.taxInvoiceNumber = taxInvoiceNumber;
+        this.documentUrl = documentUrl;
+        this.fileSize = fileSize;
+        this.xmlEmbedded = xmlEmbedded;
+        this.correlationId = correlationId;
     }
 }

@@ -47,28 +47,6 @@ public class EventPublisher {
         log.info("Published TaxInvoicePdfGeneratedEvent to outbox for notification: {}", event.getTaxInvoiceNumber());
     }
 
-    /**
-     * Publish PDF signing requested event to pdf.signing.requested topic (for PDF Signing Service).
-     */
-    @Transactional(propagation = Propagation.MANDATORY)
-    public void publishPdfSigningRequested(TaxInvoicePdfGeneratedEvent event) {
-        Map<String, String> headers = Map.of(
-            "documentType", "TAX_INVOICE",
-            "correlationId", event.getCorrelationId()
-        );
-
-        outboxService.saveWithRouting(
-            event,
-            AGGREGATE_TYPE,
-            event.getTaxInvoiceId(),
-            "pdf.signing.requested",
-            event.getTaxInvoiceId(),
-            toJson(headers)
-        );
-
-        log.info("Published PDF signing request to outbox: {}", event.getTaxInvoiceNumber());
-    }
-
     private String toJson(Map<String, String> map) {
         try {
             return objectMapper.writeValueAsString(map);

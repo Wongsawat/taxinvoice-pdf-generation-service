@@ -177,7 +177,8 @@ public class SagaCommandHandler {
     }
 
     /**
-     * Publish PDF generated events to notification and PDF signing topics.
+     * Publish PDF generated event to notification service.
+     * PDF signing is handled by the orchestrator via saga commands.
      */
     private void publishEvents(TaxInvoicePdfDocumentEntity entity, ProcessTaxInvoicePdfCommand command) {
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
@@ -190,9 +191,6 @@ public class SagaCommandHandler {
                 command.getCorrelationId()
         );
 
-        // Publish to notification service
         eventPublisher.publishPdfGenerated(event);
-        // Publish to PDF signing service
-        eventPublisher.publishPdfSigningRequested(event);
     }
 }

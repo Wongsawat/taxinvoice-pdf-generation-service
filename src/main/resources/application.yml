@@ -51,7 +51,6 @@ app:
       saga-command-tax-invoice-pdf: saga.command.tax-invoice-pdf
       saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf
       pdf-generated-tax-invoice: pdf.generated.tax-invoice
-      pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.tax-invoice.dlq
   pdf:
     storage:

@@ -101,7 +101,7 @@ class SagaCommandHandlerTest {
         verify(pdfDocumentService).generatePdf("tax-inv-001", "TXINV-2024-001",
                 "<TaxInvoice>signed</TaxInvoice>", "{}");
         verify(eventPublisher).publishPdfGenerated(any());
-        verify(eventPublisher).publishPdfSigningRequested(any());
+
         verify(sagaReplyPublisher).publishSuccess("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456");
     }
 
@@ -119,7 +119,7 @@ class SagaCommandHandlerTest {
         // Then
         verify(pdfDocumentService, never()).generatePdf(anyString(), anyString(), anyString(), anyString());
         verify(eventPublisher).publishPdfGenerated(any());
-        verify(eventPublisher).publishPdfSigningRequested(any());
+
         verify(sagaReplyPublisher).publishSuccess("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456");
     }
 

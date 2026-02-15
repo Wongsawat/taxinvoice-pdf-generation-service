@@ -25,7 +25,7 @@ import java.util.UUID;
  * <ul>
  *   <li>Consumes from: xml.signed.tax-invoice</li>
  *   <li>Produces to: pdf.generated (for Notification Service)</li>
- *   <li>Produces to: pdf.signing.tax-invoice.requested (for PDF Signing Service)</li>
+ *   <li>Produces to: pdf.signing.requested (for PDF Signing Service)</li>
  *   <li>DLQ: pdf.generation.tax-invoice.dlq</li>
  * </ul>
  */
@@ -216,6 +216,7 @@ public class CamelRouteConfig extends RouteBuilder {
         event.put("documentId", documentId != null ? documentId : document.getId().toString());
         event.put("taxInvoiceId", document.getTaxInvoiceId());
         event.put("taxInvoiceNumber", document.getTaxInvoiceNumber());
+        event.put("documentType", DOCUMENT_TYPE_TAX_INVOICE);
         event.put("pdfDocumentId", document.getId().toString());
         event.put("documentUrl", document.getDocumentUrl());
         event.put("documentPath", document.getDocumentPath());

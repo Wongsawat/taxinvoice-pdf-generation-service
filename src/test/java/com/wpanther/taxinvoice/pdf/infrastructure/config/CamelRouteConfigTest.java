@@ -2,11 +2,12 @@ package com.wpanther.taxinvoice.pdf.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.wpanther.taxinvoice.pdf.application.service.TaxInvoicePdfDocumentService;
+import com.wpanther.taxinvoice.pdf.application.service.SagaCommandHandler;
+import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
+import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfReplyEvent;
 import com.wpanther.taxinvoice.pdf.domain.event.XmlSignedTaxInvoiceEvent;
-import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
-import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -14,9 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.lang.reflect.Method;
-import java.time.LocalDateTime;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -26,7 +24,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CamelRouteConfigTest {
 
     @Mock
-    private TaxInvoicePdfDocumentService documentService;
+    private SagaCommandHandler sagaCommandHandler;
 
     private ObjectMapper objectMapper;
     private CamelRouteConfig camelRouteConfig;
@@ -35,132 +33,54 @@ class CamelRouteConfigTest {
     void setUp() {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        camelRouteConfig = new CamelRouteConfig(
-                documentService,
-                objectMapper,
-                "xml.signed.tax-invoice",
-                "pdf.generated",
-                "pdf.signing.requested",
-                "pdf.generation.tax-invoice.dlq",
-                "localhost:9092",
-                "taxinvoice-pdf-generation-service"
-        );
+        camelRouteConfig = new CamelRouteConfig(sagaCommandHandler);
     }
 
     @Test
-    @DisplayName("Should create PDF generated event with all required fields")
-    void testCreatePdfGeneratedEventContainsAllFields() throws Exception {
+    @DisplayName("Should serialize and deserialize ProcessTaxInvoicePdfCommand")
+    void testProcessTaxInvoicePdfCommandSerialization() throws Exception {
         // Given
-        UUID documentId = UUID.randomUUID();
-        TaxInvoicePdfDocument document = TaxInvoicePdfDocument.builder()
-                .id(documentId)
-                .taxInvoiceId("tax-inv-001")
-                .taxInvoiceNumber("TXINV-2024-001")
-                .documentPath("/var/documents/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001.pdf")
-                .documentUrl("http://localhost:8084/documents/2024/01/15/taxinvoice-TXINV-2024-001.pdf")
-                .fileSize(12345L)
-                .mimeType("application/pdf")
-                .xmlEmbedded(true)
-                .status(GenerationStatus.COMPLETED)
-                .completedAt(LocalDateTime.now())
-                .build();
+        ProcessTaxInvoicePdfCommand command = new ProcessTaxInvoicePdfCommand(
+                "saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "<TaxInvoice>...</TaxInvoice>", "{}"
+        );
 
         // When
-        Method createEventMethod = CamelRouteConfig.class.getDeclaredMethod(
-                "createPdfGeneratedEvent",
-                TaxInvoicePdfDocument.class,
-                String.class,
-                String.class
-        );
-        createEventMethod.setAccessible(true);
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> event = (Map<String, Object>) createEventMethod.invoke(
-                camelRouteConfig, document, "doc-123", "corr-456"
-        );
+        String json = objectMapper.writeValueAsString(command);
+        ProcessTaxInvoicePdfCommand deserialized = objectMapper.readValue(json, ProcessTaxInvoicePdfCommand.class);
 
         // Then
-        assertThat(event).containsKeys(
-                "eventId", "eventType", "occurredAt", "version",
-                "documentId", "taxInvoiceId", "taxInvoiceNumber", "documentType",
-                "pdfDocumentId", "documentUrl", "documentPath",
-                "fileSize", "mimeType", "xmlEmbedded",
-                "correlationId", "generatedAt"
-        );
-        assertThat(event.get("eventType")).isEqualTo("pdf.generated.tax-invoice");
-        assertThat(event.get("version")).isEqualTo(1);
-        assertThat(event.get("documentId")).isEqualTo("doc-123");
-        assertThat(event.get("taxInvoiceId")).isEqualTo("tax-inv-001");
-        assertThat(event.get("taxInvoiceNumber")).isEqualTo("TXINV-2024-001");
-        assertThat(event.get("documentType")).isEqualTo("TAX_INVOICE");
-        assertThat(event.get("pdfDocumentId")).isEqualTo(documentId.toString());
-        assertThat(event.get("fileSize")).isEqualTo(12345L);
-        assertThat(event.get("xmlEmbedded")).isEqualTo(true);
-        assertThat(event.get("correlationId")).isEqualTo("corr-456");
+        assertThat(deserialized.getSagaId()).isEqualTo("saga-001");
+        assertThat(deserialized.getSagaStep()).isEqualTo("GENERATE_TAX_INVOICE_PDF");
+        assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
+        assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
+        assertThat(deserialized.getTaxInvoiceId()).isEqualTo("tax-inv-001");
+        assertThat(deserialized.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
+        assertThat(deserialized.getSignedXmlContent()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
+        assertThat(deserialized.getTaxInvoiceDataJson()).isEqualTo("{}");
+        assertThat(deserialized.getEventId()).isNotNull();
     }
 
     @Test
-    @DisplayName("Should use document ID as fallback when documentId parameter is null")
-    void testCreatePdfGeneratedEventUsesDocumentIdFallback() throws Exception {
+    @DisplayName("Should serialize and deserialize CompensateTaxInvoicePdfCommand")
+    void testCompensateTaxInvoicePdfCommandSerialization() throws Exception {
         // Given
-        UUID documentId = UUID.randomUUID();
-        TaxInvoicePdfDocument document = TaxInvoicePdfDocument.builder()
-                .id(documentId)
-                .taxInvoiceId("tax-inv-001")
-                .taxInvoiceNumber("TXINV-2024-001")
-                .status(GenerationStatus.COMPLETED)
-                .build();
-
-        // When
-        Method createEventMethod = CamelRouteConfig.class.getDeclaredMethod(
-                "createPdfGeneratedEvent",
-                TaxInvoicePdfDocument.class,
-                String.class,
-                String.class
-        );
-        createEventMethod.setAccessible(true);
-
-        @SuppressWarnings("unchecked")
-        Map<String, Object> event = (Map<String, Object>) createEventMethod.invoke(
-                camelRouteConfig, document, null, "corr-456"
+        CompensateTaxInvoicePdfCommand command = new CompensateTaxInvoicePdfCommand(
+                "saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+                "doc-123", "tax-inv-001"
         );
 
-        // Then
-        assertThat(event.get("documentId")).isEqualTo(documentId.toString());
-    }
-
-    @Test
-    @DisplayName("Should build correct Kafka consumer URI")
-    void testBuildKafkaConsumerUri() throws Exception {
         // When
-        Method buildUriMethod = CamelRouteConfig.class.getDeclaredMethod(
-                "buildKafkaConsumerUri", String.class);
-        buildUriMethod.setAccessible(true);
-
-        String uri = (String) buildUriMethod.invoke(camelRouteConfig, "test-topic");
+        String json = objectMapper.writeValueAsString(command);
+        CompensateTaxInvoicePdfCommand deserialized = objectMapper.readValue(json, CompensateTaxInvoicePdfCommand.class);
 
         // Then
-        assertThat(uri).contains("kafka:test-topic");
-        assertThat(uri).contains("brokers=localhost:9092");
-        assertThat(uri).contains("groupId=taxinvoice-pdf-generation-service");
-        assertThat(uri).contains("autoOffsetReset=earliest");
-        assertThat(uri).contains("autoCommitEnable=false");
-        assertThat(uri).contains("allowManualCommit=true");
-        assertThat(uri).contains("breakOnFirstError=true");
-    }
-
-    @Test
-    @DisplayName("Should build correct Kafka producer URI")
-    void testBuildKafkaProducerUri() throws Exception {
-        // When
-        Method buildUriMethod = CamelRouteConfig.class.getDeclaredMethod(
-                "buildKafkaUri", String.class);
-        buildUriMethod.setAccessible(true);
-
-        String uri = (String) buildUriMethod.invoke(camelRouteConfig, "output-topic");
-
-        // Then
-        assertThat(uri).isEqualTo("kafka:output-topic?brokers=localhost:9092");
+        assertThat(deserialized.getSagaId()).isEqualTo("saga-001");
+        assertThat(deserialized.getSagaStep()).isEqualTo("GENERATE_TAX_INVOICE_PDF");
+        assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
+        assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
+        assertThat(deserialized.getTaxInvoiceId()).isEqualTo("tax-inv-001");
     }
 
     @Test
@@ -213,5 +133,64 @@ class CamelRouteConfigTest {
         assertThat(event.getSignedXmlContent()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
         assertThat(event.getTaxInvoiceDataJson()).isEqualTo("{}");
         assertThat(event.getCorrelationId()).isEqualTo("corr-456");
+    }
+
+    @Test
+    @DisplayName("Should create TaxInvoicePdfReplyEvent with correct status")
+    void testTaxInvoicePdfReplyEventCreation() throws Exception {
+        // Given
+        TaxInvoicePdfReplyEvent successReply = TaxInvoicePdfReplyEvent.success("saga-001", "step-1", "corr-456");
+        TaxInvoicePdfReplyEvent failureReply = TaxInvoicePdfReplyEvent.failure("saga-001", "step-1", "corr-456", "error msg");
+        TaxInvoicePdfReplyEvent compensatedReply = TaxInvoicePdfReplyEvent.compensated("saga-001", "step-1", "corr-456");
+
+        // Then
+        assertThat(successReply.isSuccess()).isTrue();
+        assertThat(successReply.getSagaId()).isEqualTo("saga-001");
+
+        assertThat(failureReply.isFailure()).isTrue();
+        assertThat(failureReply.getErrorMessage()).isEqualTo("error msg");
+
+        assertThat(compensatedReply.isCompensated()).isTrue();
+
+        // Verify serialization
+        String json = objectMapper.writeValueAsString(successReply);
+        assertThat(json).contains("\"sagaId\":\"saga-001\"");
+        assertThat(json).contains("\"status\":\"SUCCESS\"");
+    }
+
+    @Test
+    @DisplayName("Should deserialize ProcessTaxInvoicePdfCommand from JSON")
+    void testProcessCommandDeserialization() throws Exception {
+        // Given
+        String json = """
+            {
+                "eventId": "550e8400-e29b-41d4-a716-446655440000",
+                "occurredAt": "2024-01-15T10:30:00Z",
+                "eventType": "saga.command.tax-invoice-pdf",
+                "version": 1,
+                "sagaId": "saga-001",
+                "sagaStep": "GENERATE_TAX_INVOICE_PDF",
+                "correlationId": "corr-456",
+                "documentId": "doc-123",
+                "taxInvoiceId": "tax-inv-001",
+                "taxInvoiceNumber": "TXINV-2024-001",
+                "signedXmlContent": "<TaxInvoice>signed</TaxInvoice>",
+                "taxInvoiceDataJson": "{\\"key\\": \\"value\\"}"
+            }
+            """;
+
+        // When
+        ProcessTaxInvoicePdfCommand cmd = objectMapper.readValue(json, ProcessTaxInvoicePdfCommand.class);
+
+        // Then
+        assertThat(cmd.getEventId()).isEqualTo(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"));
+        assertThat(cmd.getSagaId()).isEqualTo("saga-001");
+        assertThat(cmd.getSagaStep()).isEqualTo("GENERATE_TAX_INVOICE_PDF");
+        assertThat(cmd.getCorrelationId()).isEqualTo("corr-456");
+        assertThat(cmd.getDocumentId()).isEqualTo("doc-123");
+        assertThat(cmd.getTaxInvoiceId()).isEqualTo("tax-inv-001");
+        assertThat(cmd.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
+        assertThat(cmd.getSignedXmlContent()).isEqualTo("<TaxInvoice>signed</TaxInvoice>");
+        assertThat(cmd.getTaxInvoiceDataJson()).isEqualTo("{\"key\": \"value\"}");
     }
 }

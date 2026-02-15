@@ -32,6 +32,9 @@ public class TaxInvoicePdfDocument {
     private GenerationStatus status;
     private String errorMessage;
 
+    // Retry tracking
+    private int retryCount;
+
     // Timestamps
     private final LocalDateTime createdAt;
     private LocalDateTime completedAt;
@@ -47,6 +50,7 @@ public class TaxInvoicePdfDocument {
         this.xmlEmbedded = builder.xmlEmbedded;
         this.status = builder.status != null ? builder.status : GenerationStatus.PENDING;
         this.errorMessage = builder.errorMessage;
+        this.retryCount = builder.retryCount;
         this.createdAt = builder.createdAt != null ? builder.createdAt : LocalDateTime.now();
         this.completedAt = builder.completedAt;
 
@@ -121,6 +125,34 @@ public class TaxInvoicePdfDocument {
         return status == GenerationStatus.COMPLETED;
     }
 
+    /**
+     * Check if generation is completed
+     */
+    public boolean isCompleted() {
+        return status == GenerationStatus.COMPLETED;
+    }
+
+    /**
+     * Check if generation has failed
+     */
+    public boolean isFailed() {
+        return status == GenerationStatus.FAILED;
+    }
+
+    /**
+     * Increment retry count
+     */
+    public void incrementRetryCount() {
+        this.retryCount++;
+    }
+
+    /**
+     * Check if max retries exceeded
+     */
+    public boolean isMaxRetriesExceeded(int maxRetries) {
+        return this.retryCount >= maxRetries;
+    }
+
     // Getters
     public UUID getId() {
         return id;
@@ -170,6 +202,10 @@ public class TaxInvoicePdfDocument {
         return completedAt;
     }
 
+    public int getRetryCount() {
+        return retryCount;
+    }
+
     /**
      * Builder for TaxInvoicePdfDocument
      */
@@ -184,6 +220,7 @@ public class TaxInvoicePdfDocument {
         private boolean xmlEmbedded;
         private GenerationStatus status;
         private String errorMessage;
+        private int retryCount;
         private LocalDateTime createdAt;
         private LocalDateTime completedAt;
 
@@ -234,6 +271,11 @@ public class TaxInvoicePdfDocument {
 
         public Builder errorMessage(String errorMessage) {
             this.errorMessage = errorMessage;
+            return this;
+        }
+
+        public Builder retryCount(int retryCount) {
+            this.retryCount = retryCount;
             return this;
         }
 

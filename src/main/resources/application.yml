@@ -34,6 +34,9 @@ camel:
   springboot:
     name: taxinvoice-pdf-generation-camel
     main-run-controller: true
+  dataformat:
+    jackson:
+      auto-discover-object-mapper: true
   component:
     kafka:
       brokers: ${KAFKA_BROKERS:localhost:9092}
@@ -45,8 +48,9 @@ app:
     consumer:
       group-id: taxinvoice-pdf-generation-service
     topics:
-      xml-signed-tax-invoice: xml.signed.tax-invoice
-      pdf-generated: pdf.generated
+      saga-command-tax-invoice-pdf: saga.command.tax-invoice-pdf
+      saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf
+      pdf-generated-tax-invoice: pdf.generated.tax-invoice
       pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.tax-invoice.dlq
   pdf:

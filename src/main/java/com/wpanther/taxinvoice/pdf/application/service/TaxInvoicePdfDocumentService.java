@@ -10,6 +10,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -117,6 +118,22 @@ public class TaxInvoicePdfDocumentService {
     }
 
     /**
+     * Delete a PDF file from the filesystem (used for compensation).
+     */
+    public void deletePdfFile(String documentPath) {
+        try {
+            Path path = Paths.get(documentPath);
+            if (Files.exists(path)) {
+                Files.delete(path);
+                log.info("Deleted PDF file: {}", documentPath);
+            }
+        } catch (IOException e) {
+            log.error("Failed to delete PDF file: {}", documentPath, e);
+            throw new RuntimeException("Failed to delete PDF file", e);
+        }
+    }
+
+    /**
      * Save domain model to database
      */
     private TaxInvoicePdfDocument saveDomain(TaxInvoicePdfDocument document) {
@@ -131,6 +148,7 @@ public class TaxInvoicePdfDocumentService {
             .xmlEmbedded(document.isXmlEmbedded())
             .status(document.getStatus())
             .errorMessage(document.getErrorMessage())
+            .retryCount(document.getRetryCount())
             .createdAt(document.getCreatedAt())
             .completedAt(document.getCompletedAt())
             .build();
@@ -148,6 +166,7 @@ public class TaxInvoicePdfDocumentService {
             .xmlEmbedded(entity.getXmlEmbedded())
             .status(entity.getStatus())
             .errorMessage(entity.getErrorMessage())
+            .retryCount(entity.getRetryCount() != null ? entity.getRetryCount() : 0)
             .createdAt(entity.getCreatedAt())
             .completedAt(entity.getCompletedAt())
             .build();

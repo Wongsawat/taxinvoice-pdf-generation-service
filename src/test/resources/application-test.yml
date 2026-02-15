@@ -22,6 +22,9 @@ camel:
   springboot:
     name: taxinvoice-pdf-generation-camel-test
     main-run-controller: false
+  dataformat:
+    jackson:
+      auto-discover-object-mapper: true
 
 # Application configuration for tests
 app:
@@ -30,8 +33,9 @@ app:
     consumer:
       group-id: taxinvoice-pdf-generation-service-test
     topics:
-      xml-signed-tax-invoice: xml.signed.tax-invoice
-      pdf-generated: pdf.generated
+      saga-command-tax-invoice-pdf: saga.command.tax-invoice-pdf
+      saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf
+      pdf-generated-tax-invoice: pdf.generated.tax-invoice
       pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.tax-invoice.dlq
   pdf:

@@ -7,7 +7,6 @@ import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfReplyEvent;
-import com.wpanther.taxinvoice.pdf.domain.event.XmlSignedTaxInvoiceEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,38 +100,6 @@ class CamelRouteConfigTest {
         assertThat(event.getEventId()).isNotNull();
         assertThat(event.getOccurredAt()).isNotNull();
         assertThat(event.getVersion()).isEqualTo(1);
-    }
-
-    @Test
-    @DisplayName("Should deserialize XmlSignedTaxInvoiceEvent from JSON")
-    void testXmlSignedTaxInvoiceEventDeserialization() throws Exception {
-        // Given
-        String json = """
-            {
-                "eventId": "550e8400-e29b-41d4-a716-446655440000",
-                "occurredAt": "2024-01-15T10:30:00Z",
-                "eventType": "xml.signed.tax-invoice",
-                "version": 1,
-                "documentId": "doc-123",
-                "taxInvoiceId": "tax-inv-001",
-                "taxInvoiceNumber": "TXINV-2024-001",
-                "signedXmlContent": "<TaxInvoice>...</TaxInvoice>",
-                "taxInvoiceDataJson": "{}",
-                "correlationId": "corr-456"
-            }
-            """;
-
-        // When
-        XmlSignedTaxInvoiceEvent event = objectMapper.readValue(json, XmlSignedTaxInvoiceEvent.class);
-
-        // Then
-        assertThat(event.getEventId()).isEqualTo(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"));
-        assertThat(event.getDocumentId()).isEqualTo("doc-123");
-        assertThat(event.getTaxInvoiceId()).isEqualTo("tax-inv-001");
-        assertThat(event.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
-        assertThat(event.getSignedXmlContent()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
-        assertThat(event.getTaxInvoiceDataJson()).isEqualTo("{}");
-        assertThat(event.getCorrelationId()).isEqualTo("corr-456");
     }
 
     @Test

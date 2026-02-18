@@ -58,7 +58,9 @@ public class SagaCommandHandler {
                 sagaReplyPublisher.publishSuccess(
                         command.getSagaId(),
                         command.getSagaStep(),
-                        command.getCorrelationId()
+                        command.getCorrelationId(),
+                        entity.getDocumentUrl(),
+                        entity.getFileSize()
                 );
                 return;
             }
@@ -104,11 +106,13 @@ public class SagaCommandHandler {
             repository.findByTaxInvoiceId(command.getTaxInvoiceId()).ifPresent(entity ->
                     publishEvents(entity, command));
 
-            // Send SUCCESS reply
+            // Send SUCCESS reply with MinIO URL for the PDF_STORAGE step
             sagaReplyPublisher.publishSuccess(
                     command.getSagaId(),
                     command.getSagaStep(),
-                    command.getCorrelationId()
+                    command.getCorrelationId(),
+                    document.getDocumentUrl(),
+                    (long) document.getFileSize()
             );
 
             log.info("Successfully processed tax invoice PDF generation for saga {} taxInvoice {}",

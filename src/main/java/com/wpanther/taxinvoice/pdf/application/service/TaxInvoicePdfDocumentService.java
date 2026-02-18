@@ -9,16 +9,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * Application service for Tax Invoice PDF document operations
+ * Application service for Tax Invoice PDF document operations.
+ * Stores generated PDFs in MinIO (S3-compatible) storage.
  */
 @Service
 @RequiredArgsConstructor
@@ -27,15 +28,16 @@ public class TaxInvoicePdfDocumentService {
 
     private final JpaTaxInvoicePdfDocumentRepository repository;
     private final TaxInvoicePdfGenerationService pdfGenerationService;
+    private final S3Client s3Client;
 
-    @Value("${app.pdf.storage.path:/var/documents/taxinvoices}")
-    private String storagePath;
+    @Value("${app.minio.bucket-name}")
+    private String bucketName;
 
-    @Value("${app.pdf.storage.base-url:http://localhost:8084}")
+    @Value("${app.minio.base-url}")
     private String baseUrl;
 
     /**
-     * Generate PDF document for tax invoice
+     * Generate PDF document for tax invoice and upload to MinIO.
      */
     @Transactional
     public TaxInvoicePdfDocument generatePdf(
@@ -64,17 +66,17 @@ public class TaxInvoicePdfDocumentService {
             byte[] pdfBytes = pdfGenerationService.generatePdf(
                 taxInvoiceNumber, xmlContent, taxInvoiceDataJson);
 
-            // Store PDF file
-            String filePath = saveToFileSystem(taxInvoiceNumber, pdfBytes);
-            String fileUrl = generateUrl(filePath);
+            // Upload to MinIO
+            String s3Key = uploadToMinIO(taxInvoiceNumber, pdfBytes);
+            String fileUrl = baseUrl + "/" + s3Key;
 
             // Mark as completed
-            document.markCompleted(filePath, fileUrl, pdfBytes.length);
+            document.markCompleted(s3Key, fileUrl, pdfBytes.length);
             document.markXmlEmbedded();
             document = saveDomain(document);
 
-            log.info("Successfully generated PDF for tax invoice: {} (size: {} bytes)",
-                taxInvoiceNumber, pdfBytes.length);
+            log.info("Successfully generated and uploaded PDF for tax invoice: {} (size: {} bytes, key: {})",
+                taxInvoiceNumber, pdfBytes.length, s3Key);
 
             return document;
 
@@ -87,54 +89,49 @@ public class TaxInvoicePdfDocumentService {
     }
 
     /**
-     * Save PDF bytes to filesystem
+     * Upload PDF bytes to MinIO and return the S3 key.
      */
-    private String saveToFileSystem(String taxInvoiceNumber, byte[] pdfBytes) throws Exception {
-        // Create directory structure: storage/YYYY/MM/DD/
+    private String uploadToMinIO(String taxInvoiceNumber, byte[] pdfBytes) {
         LocalDate now = LocalDate.now();
-        Path dir = Paths.get(storagePath, String.valueOf(now.getYear()),
-            String.format("%02d", now.getMonthValue()),
-            String.format("%02d", now.getDayOfMonth()));
+        String fileName = String.format("taxinvoice-%s-%s.pdf",
+            taxInvoiceNumber.replaceAll("[^a-zA-Z0-9\\-_]", "_"),
+            UUID.randomUUID());
+        String s3Key = String.format("%04d/%02d/%02d/%s",
+            now.getYear(), now.getMonthValue(), now.getDayOfMonth(), fileName);
 
-        Files.createDirectories(dir);
+        PutObjectRequest putRequest = PutObjectRequest.builder()
+            .bucket(bucketName)
+            .key(s3Key)
+            .contentType("application/pdf")
+            .contentLength((long) pdfBytes.length)
+            .build();
 
-        // Save file
-        String fileName = String.format("taxinvoice-%s-%s.pdf", taxInvoiceNumber, UUID.randomUUID());
-        Path filePath = dir.resolve(fileName);
-        Files.write(filePath, pdfBytes);
+        s3Client.putObject(putRequest, RequestBody.fromBytes(pdfBytes));
+        log.debug("Uploaded PDF to MinIO: bucket={}, key={}", bucketName, s3Key);
 
-        log.debug("Saved PDF to: {}", filePath);
-
-        return filePath.toString();
+        return s3Key;
     }
 
     /**
-     * Generate URL for accessing the document
+     * Delete a PDF from MinIO (used for compensation).
+     * The documentPath column stores the S3 key.
      */
-    private String generateUrl(String filePath) {
-        // Convert filesystem path to URL path
-        String relativePath = filePath.replace(storagePath, "").replace("\\", "/");
-        return baseUrl + "/documents" + relativePath;
-    }
-
-    /**
-     * Delete a PDF file from the filesystem (used for compensation).
-     */
-    public void deletePdfFile(String documentPath) {
+    public void deletePdfFile(String s3Key) {
         try {
-            Path path = Paths.get(documentPath);
-            if (Files.exists(path)) {
-                Files.delete(path);
-                log.info("Deleted PDF file: {}", documentPath);
-            }
-        } catch (IOException e) {
-            log.error("Failed to delete PDF file: {}", documentPath, e);
-            throw new RuntimeException("Failed to delete PDF file", e);
+            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                .bucket(bucketName)
+                .key(s3Key)
+                .build();
+            s3Client.deleteObject(deleteRequest);
+            log.info("Deleted PDF from MinIO: bucket={}, key={}", bucketName, s3Key);
+        } catch (Exception e) {
+            log.error("Failed to delete PDF from MinIO: key={}", s3Key, e);
+            throw new RuntimeException("Failed to delete PDF from MinIO", e);
         }
     }
 
     /**
-     * Save domain model to database
+     * Save domain model to database.
      */
     private TaxInvoicePdfDocument saveDomain(TaxInvoicePdfDocument document) {
         TaxInvoicePdfDocumentEntity entity = TaxInvoicePdfDocumentEntity.builder()

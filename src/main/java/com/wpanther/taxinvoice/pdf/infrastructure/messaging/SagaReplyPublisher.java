@@ -28,8 +28,9 @@ public class SagaReplyPublisher {
     private final ObjectMapper objectMapper;
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishSuccess(String sagaId, String sagaStep, String correlationId) {
-        TaxInvoicePdfReplyEvent reply = TaxInvoicePdfReplyEvent.success(sagaId, sagaStep, correlationId);
+    public void publishSuccess(String sagaId, String sagaStep, String correlationId,
+                               String pdfUrl, Long pdfSize) {
+        TaxInvoicePdfReplyEvent reply = TaxInvoicePdfReplyEvent.success(sagaId, sagaStep, correlationId, pdfUrl, pdfSize);
 
         Map<String, String> headers = Map.of(
                 "sagaId", sagaId,
@@ -46,7 +47,7 @@ public class SagaReplyPublisher {
                 toJson(headers)
         );
 
-        log.info("Published SUCCESS saga reply for saga {} step {}", sagaId, sagaStep);
+        log.info("Published SUCCESS saga reply for saga {} step {} with pdfUrl={}", sagaId, sagaStep, pdfUrl);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

@@ -37,10 +37,14 @@ app:
       saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf
       pdf-generated-tax-invoice: pdf.generated.tax-invoice
       dlq: pdf.generation.tax-invoice.dlq
-  pdf:
-    storage:
-      path: /tmp/test-documents/taxinvoices
-      base-url: http://localhost:8084
+  minio:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket-name: taxinvoices-test
+    region: us-east-1
+    base-url: http://localhost:9000/taxinvoices-test
+    path-style-access: true
 
 # Disable Eureka for tests
 eureka:

@@ -90,6 +90,8 @@ class SagaCommandHandlerTest {
                 .taxInvoiceId("tax-inv-001")
                 .taxInvoiceNumber("TXINV-2024-001")
                 .status(GenerationStatus.COMPLETED)
+                .documentUrl("http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf")
+                .fileSize(12345)
                 .build();
         when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(document);
@@ -102,7 +104,8 @@ class SagaCommandHandlerTest {
                 "<TaxInvoice>signed</TaxInvoice>", "{}");
         verify(eventPublisher).publishPdfGenerated(any());
 
-        verify(sagaReplyPublisher).publishSuccess("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456");
+        verify(sagaReplyPublisher).publishSuccess("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+                "http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf", 12345L);
     }
 
     @Test
@@ -120,7 +123,8 @@ class SagaCommandHandlerTest {
         verify(pdfDocumentService, never()).generatePdf(anyString(), anyString(), anyString(), anyString());
         verify(eventPublisher).publishPdfGenerated(any());
 
-        verify(sagaReplyPublisher).publishSuccess("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456");
+        verify(sagaReplyPublisher).publishSuccess(eq("saga-001"), eq("GENERATE_TAX_INVOICE_PDF"), eq("corr-456"),
+                eq("http://localhost:8084/documents/test.pdf"), eq(12345L));
     }
 
     @Test

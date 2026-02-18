@@ -106,7 +106,8 @@ class CamelRouteConfigTest {
     @DisplayName("Should create TaxInvoicePdfReplyEvent with correct status")
     void testTaxInvoicePdfReplyEventCreation() throws Exception {
         // Given
-        TaxInvoicePdfReplyEvent successReply = TaxInvoicePdfReplyEvent.success("saga-001", "step-1", "corr-456");
+        TaxInvoicePdfReplyEvent successReply = TaxInvoicePdfReplyEvent.success("saga-001", "step-1", "corr-456",
+                "http://localhost:9000/taxinvoices/test.pdf", 12345L);
         TaxInvoicePdfReplyEvent failureReply = TaxInvoicePdfReplyEvent.failure("saga-001", "step-1", "corr-456", "error msg");
         TaxInvoicePdfReplyEvent compensatedReply = TaxInvoicePdfReplyEvent.compensated("saga-001", "step-1", "corr-456");
 

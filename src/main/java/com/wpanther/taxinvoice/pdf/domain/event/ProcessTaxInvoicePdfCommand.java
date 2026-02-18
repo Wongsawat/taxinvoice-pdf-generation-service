@@ -35,8 +35,8 @@ public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
     @JsonProperty("taxInvoiceNumber")
     private final String taxInvoiceNumber;
 
-    @JsonProperty("signedXmlContent")
-    private final String signedXmlContent;
+    @JsonProperty("signedXmlUrl")
+    private final String signedXmlUrl;
 
     @JsonProperty("taxInvoiceDataJson")
     private final String taxInvoiceDataJson;
@@ -53,7 +53,7 @@ public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
             @JsonProperty("documentId") String documentId,
             @JsonProperty("taxInvoiceId") String taxInvoiceId,
             @JsonProperty("taxInvoiceNumber") String taxInvoiceNumber,
-            @JsonProperty("signedXmlContent") String signedXmlContent,
+            @JsonProperty("signedXmlUrl") String signedXmlUrl,
             @JsonProperty("taxInvoiceDataJson") String taxInvoiceDataJson) {
         super(eventId, occurredAt, eventType, version);
         this.sagaId = sagaId;
@@ -62,7 +62,7 @@ public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
         this.documentId = documentId;
         this.taxInvoiceId = taxInvoiceId;
         this.taxInvoiceNumber = taxInvoiceNumber;
-        this.signedXmlContent = signedXmlContent;
+        this.signedXmlUrl = signedXmlUrl;
         this.taxInvoiceDataJson = taxInvoiceDataJson;
     }
 
@@ -71,7 +71,7 @@ public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
      */
     public ProcessTaxInvoicePdfCommand(String sagaId, String sagaStep, String correlationId,
                                         String documentId, String taxInvoiceId, String taxInvoiceNumber,
-                                        String signedXmlContent, String taxInvoiceDataJson) {
+                                        String signedXmlUrl, String taxInvoiceDataJson) {
         super();
         this.sagaId = sagaId;
         this.sagaStep = sagaStep;
@@ -79,7 +79,7 @@ public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
         this.documentId = documentId;
         this.taxInvoiceId = taxInvoiceId;
         this.taxInvoiceNumber = taxInvoiceNumber;
-        this.signedXmlContent = signedXmlContent;
+        this.signedXmlUrl = signedXmlUrl;
         this.taxInvoiceDataJson = taxInvoiceDataJson;
     }
 }

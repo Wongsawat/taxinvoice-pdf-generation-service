@@ -6,6 +6,7 @@ import com.wpanther.saga.domain.outbox.OutboxEventRepository;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.RestTemplate;
 
 /**
  * Configuration class for OutboxEventRepository bean.
@@ -21,5 +22,10 @@ public class OutboxConfig {
     @ConditionalOnMissingBean(OutboxEventRepository.class)
     public OutboxEventRepository outboxEventRepository(SpringDataOutboxRepository springRepository) {
         return new JpaOutboxEventRepository(springRepository);
+    }
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
     }
 }

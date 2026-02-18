@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 
@@ -29,6 +30,7 @@ public class SagaCommandHandler {
     private final TaxInvoicePdfDocumentService pdfDocumentService;
     private final SagaReplyPublisher sagaReplyPublisher;
     private final EventPublisher eventPublisher;
+    private final RestTemplate restTemplate;
 
     @Value("${app.pdf.generation.max-retries:3}")
     private int maxRetries;
@@ -85,11 +87,18 @@ public class SagaCommandHandler {
                 repository.flush();
             }
 
+            // Download signed XML from MinIO
+            String signedXmlUrl = command.getSignedXmlUrl();
+            String signedXml = restTemplate.getForObject(signedXmlUrl, String.class);
+            if (signedXml == null || signedXml.isBlank()) {
+                throw new IllegalStateException("Failed to download signed XML from " + signedXmlUrl);
+            }
+
             // Generate PDF (calls existing service)
             TaxInvoicePdfDocument document = pdfDocumentService.generatePdf(
                     command.getTaxInvoiceId(),
                     command.getTaxInvoiceNumber(),
-                    command.getSignedXmlContent(),
+                    signedXml,
                     command.getTaxInvoiceDataJson()
             );
 

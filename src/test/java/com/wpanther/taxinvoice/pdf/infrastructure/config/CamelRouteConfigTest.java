@@ -56,7 +56,7 @@ class CamelRouteConfigTest {
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
         assertThat(deserialized.getTaxInvoiceId()).isEqualTo("tax-inv-001");
         assertThat(deserialized.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
-        assertThat(deserialized.getSignedXmlContent()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
+        assertThat(deserialized.getSignedXmlUrl()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
         assertThat(deserialized.getTaxInvoiceDataJson()).isEqualTo("{}");
         assertThat(deserialized.getEventId()).isNotNull();
     }
@@ -142,7 +142,7 @@ class CamelRouteConfigTest {
                 "documentId": "doc-123",
                 "taxInvoiceId": "tax-inv-001",
                 "taxInvoiceNumber": "TXINV-2024-001",
-                "signedXmlContent": "<TaxInvoice>signed</TaxInvoice>",
+                "signedXmlUrl": "<TaxInvoice>signed</TaxInvoice>",
                 "taxInvoiceDataJson": "{\\"key\\": \\"value\\"}"
             }
             """;
@@ -158,7 +158,7 @@ class CamelRouteConfigTest {
         assertThat(cmd.getDocumentId()).isEqualTo("doc-123");
         assertThat(cmd.getTaxInvoiceId()).isEqualTo("tax-inv-001");
         assertThat(cmd.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
-        assertThat(cmd.getSignedXmlContent()).isEqualTo("<TaxInvoice>signed</TaxInvoice>");
+        assertThat(cmd.getSignedXmlUrl()).isEqualTo("<TaxInvoice>signed</TaxInvoice>");
         assertThat(cmd.getTaxInvoiceDataJson()).isEqualTo("{\"key\": \"value\"}");
     }
 }

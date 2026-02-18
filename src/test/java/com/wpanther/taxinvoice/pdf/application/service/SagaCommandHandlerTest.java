@@ -16,6 +16,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -39,6 +40,9 @@ class SagaCommandHandlerTest {
     @Mock
     private EventPublisher eventPublisher;
 
+    @Mock
+    private RestTemplate restTemplate;
+
     @InjectMocks
     private SagaCommandHandler sagaCommandHandler;
 
@@ -47,11 +51,14 @@ class SagaCommandHandlerTest {
         ReflectionTestUtils.setField(sagaCommandHandler, "maxRetries", 3);
     }
 
+    private static final String SIGNED_XML_URL = "http://minio:9000/signed/taxinvoice-signed.xml";
+    private static final String SIGNED_XML_CONTENT = "<TaxInvoice>signed</TaxInvoice>";
+
     private ProcessTaxInvoicePdfCommand createProcessCommand() {
         return new ProcessTaxInvoicePdfCommand(
                 "saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
                 "doc-123", "tax-inv-001", "TXINV-2024-001",
-                "<TaxInvoice>signed</TaxInvoice>", "{}"
+                SIGNED_XML_URL, "{}"
         );
     }
 
@@ -85,6 +92,7 @@ class SagaCommandHandlerTest {
         when(repository.findByTaxInvoiceId("tax-inv-001"))
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(createCompletedEntity()));
+        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
 
         TaxInvoicePdfDocument document = TaxInvoicePdfDocument.builder()
                 .taxInvoiceId("tax-inv-001")
@@ -101,7 +109,7 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(pdfDocumentService).generatePdf("tax-inv-001", "TXINV-2024-001",
-                "<TaxInvoice>signed</TaxInvoice>", "{}");
+                SIGNED_XML_CONTENT, "{}");
         verify(eventPublisher).publishPdfGenerated(any());
 
         verify(sagaReplyPublisher).publishSuccess("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
@@ -158,6 +166,7 @@ class SagaCommandHandlerTest {
         ProcessTaxInvoicePdfCommand command = createProcessCommand();
         when(repository.findByTaxInvoiceId("tax-inv-001"))
                 .thenReturn(Optional.empty());
+        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
                 .thenThrow(new RuntimeException("PDF generation error"));
 

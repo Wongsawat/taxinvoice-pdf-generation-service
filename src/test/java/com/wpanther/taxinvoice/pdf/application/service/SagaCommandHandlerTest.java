@@ -5,10 +5,9 @@ import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
+import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
 import com.wpanther.taxinvoice.pdf.infrastructure.messaging.EventPublisher;
 import com.wpanther.taxinvoice.pdf.infrastructure.messaging.SagaReplyPublisher;
-import com.wpanther.taxinvoice.pdf.infrastructure.persistence.JpaTaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.infrastructure.persistence.TaxInvoicePdfDocumentEntity;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,7 +29,7 @@ import static org.mockito.Mockito.*;
 class SagaCommandHandlerTest {
 
     @Mock
-    private JpaTaxInvoicePdfDocumentRepository repository;
+    private TaxInvoicePdfDocumentRepository repository;
 
     @Mock
     private TaxInvoicePdfDocumentService pdfDocumentService;
@@ -70,8 +69,8 @@ class SagaCommandHandlerTest {
         );
     }
 
-    private TaxInvoicePdfDocumentEntity createCompletedEntity() {
-        return TaxInvoicePdfDocumentEntity.builder()
+    private TaxInvoicePdfDocument createCompletedDocument() {
+        return TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
                 .taxInvoiceId("tax-inv-001")
                 .taxInvoiceNumber("TXINV-2024-001")
@@ -90,9 +89,7 @@ class SagaCommandHandlerTest {
     void testHandleProcessCommand_Success() {
         // Given
         ProcessTaxInvoicePdfCommand command = createProcessCommand();
-        when(repository.findByTaxInvoiceId("tax-inv-001"))
-                .thenReturn(Optional.empty())
-                .thenReturn(Optional.of(createCompletedEntity()));
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
         when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
 
         TaxInvoicePdfDocument document = TaxInvoicePdfDocument.builder()
@@ -100,7 +97,7 @@ class SagaCommandHandlerTest {
                 .taxInvoiceNumber("TXINV-2024-001")
                 .status(GenerationStatus.COMPLETED)
                 .documentUrl("http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf")
-                .fileSize(12345)
+                .fileSize(12345L)
                 .build();
         when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(document);
@@ -109,10 +106,8 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then
-        verify(pdfDocumentService).generatePdf("tax-inv-001", "TXINV-2024-001",
-                SIGNED_XML_CONTENT, "{}");
+        verify(pdfDocumentService).generatePdf("tax-inv-001", "TXINV-2024-001", SIGNED_XML_CONTENT, "{}");
         verify(eventPublisher).publishPdfGenerated(any());
-
         verify(sagaReplyPublisher).publishSuccess("saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf", 12345L);
     }
@@ -123,7 +118,7 @@ class SagaCommandHandlerTest {
         // Given
         ProcessTaxInvoicePdfCommand command = createProcessCommand();
         when(repository.findByTaxInvoiceId("tax-inv-001"))
-                .thenReturn(Optional.of(createCompletedEntity()));
+                .thenReturn(Optional.of(createCompletedDocument()));
 
         // When
         sagaCommandHandler.handleProcessCommand(command);
@@ -131,7 +126,6 @@ class SagaCommandHandlerTest {
         // Then
         verify(pdfDocumentService, never()).generatePdf(anyString(), anyString(), anyString(), anyString());
         verify(eventPublisher).publishPdfGenerated(any());
-
         verify(sagaReplyPublisher).publishSuccess(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF), eq("corr-456"),
                 eq("http://localhost:8084/documents/test.pdf"), eq(12345L));
     }
@@ -141,15 +135,14 @@ class SagaCommandHandlerTest {
     void testHandleProcessCommand_MaxRetriesExceeded() {
         // Given
         ProcessTaxInvoicePdfCommand command = createProcessCommand();
-        TaxInvoicePdfDocumentEntity failedEntity = TaxInvoicePdfDocumentEntity.builder()
+        TaxInvoicePdfDocument failedDocument = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
                 .taxInvoiceId("tax-inv-001")
                 .taxInvoiceNumber("TXINV-2024-001")
                 .status(GenerationStatus.FAILED)
                 .retryCount(3)
                 .build();
-        when(repository.findByTaxInvoiceId("tax-inv-001"))
-                .thenReturn(Optional.of(failedEntity));
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(failedDocument));
 
         // When
         sagaCommandHandler.handleProcessCommand(command);
@@ -165,8 +158,7 @@ class SagaCommandHandlerTest {
     void testHandleProcessCommand_GenerationFails() {
         // Given
         ProcessTaxInvoicePdfCommand command = createProcessCommand();
-        when(repository.findByTaxInvoiceId("tax-inv-001"))
-                .thenReturn(Optional.empty());
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
         when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
         when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
                 .thenThrow(new RuntimeException("PDF generation error"));
@@ -184,16 +176,15 @@ class SagaCommandHandlerTest {
     void testHandleCompensation_Success() {
         // Given
         CompensateTaxInvoicePdfCommand command = createCompensateCommand();
-        TaxInvoicePdfDocumentEntity entity = createCompletedEntity();
-        when(repository.findByTaxInvoiceId("tax-inv-001"))
-                .thenReturn(Optional.of(entity));
+        TaxInvoicePdfDocument document = createCompletedDocument();
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(document));
 
         // When
         sagaCommandHandler.handleCompensation(command);
 
         // Then
-        verify(pdfDocumentService).deletePdfFile(entity.getDocumentPath());
-        verify(repository).deleteById(entity.getId());
+        verify(pdfDocumentService).deletePdfFile(document.getDocumentPath());
+        verify(repository).deleteById(document.getId());
         verify(sagaReplyPublisher).publishCompensated("saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456");
     }
 
@@ -202,8 +193,7 @@ class SagaCommandHandlerTest {
     void testHandleCompensation_NoDocumentFound() {
         // Given
         CompensateTaxInvoicePdfCommand command = createCompensateCommand();
-        when(repository.findByTaxInvoiceId("tax-inv-001"))
-                .thenReturn(Optional.empty());
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
 
         // When
         sagaCommandHandler.handleCompensation(command);
@@ -219,9 +209,8 @@ class SagaCommandHandlerTest {
     void testHandleCompensation_Failure() {
         // Given
         CompensateTaxInvoicePdfCommand command = createCompensateCommand();
-        TaxInvoicePdfDocumentEntity entity = createCompletedEntity();
-        when(repository.findByTaxInvoiceId("tax-inv-001"))
-                .thenReturn(Optional.of(entity));
+        TaxInvoicePdfDocument document = createCompletedDocument();
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(document));
         doThrow(new RuntimeException("Delete failed"))
                 .when(pdfDocumentService).deletePdfFile(anyString());
 

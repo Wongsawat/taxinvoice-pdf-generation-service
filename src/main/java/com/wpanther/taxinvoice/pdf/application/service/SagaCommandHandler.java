@@ -4,8 +4,7 @@ import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
-import com.wpanther.taxinvoice.pdf.infrastructure.persistence.JpaTaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.infrastructure.persistence.TaxInvoicePdfDocumentEntity;
+import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
 import com.wpanther.taxinvoice.pdf.infrastructure.messaging.EventPublisher;
 import com.wpanther.taxinvoice.pdf.infrastructure.messaging.SagaReplyPublisher;
 import lombok.RequiredArgsConstructor;
@@ -26,7 +25,7 @@ import java.util.Optional;
 @Slf4j
 public class SagaCommandHandler {
 
-    private final JpaTaxInvoicePdfDocumentRepository repository;
+    private final TaxInvoicePdfDocumentRepository repository;
     private final TaxInvoicePdfDocumentService pdfDocumentService;
     private final SagaReplyPublisher sagaReplyPublisher;
     private final EventPublisher eventPublisher;
@@ -45,45 +44,35 @@ public class SagaCommandHandler {
                 command.getSagaId(), command.getTaxInvoiceNumber());
 
         try {
-            // Check if already generated (idempotency)
-            Optional<TaxInvoicePdfDocumentEntity> existing =
+            Optional<TaxInvoicePdfDocument> existing =
                     repository.findByTaxInvoiceId(command.getTaxInvoiceId());
 
-            if (existing.isPresent() && existing.get().getStatus() == com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus.COMPLETED) {
+            // Idempotency: already completed — re-publish events and reply SUCCESS
+            if (existing.isPresent() && existing.get().isCompleted()) {
                 log.warn("Tax invoice PDF already generated for {}, sending SUCCESS reply",
                         command.getTaxInvoiceNumber());
-
-                // Publish events for already-completed document
-                TaxInvoicePdfDocumentEntity entity = existing.get();
-                publishEvents(entity, command);
-
+                TaxInvoicePdfDocument document = existing.get();
+                publishEvents(document, command);
                 sagaReplyPublisher.publishSuccess(
-                        command.getSagaId(),
-                        command.getSagaStep(),
-                        command.getCorrelationId(),
-                        entity.getDocumentUrl(),
-                        entity.getFileSize()
-                );
+                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                        document.getDocumentUrl(), document.getFileSize());
                 return;
             }
 
-            // Check retry limit for previously failed attempts
-            if (existing.isPresent() && existing.get().getStatus() == com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus.FAILED) {
-                TaxInvoicePdfDocumentEntity entity = existing.get();
-                int retryCount = entity.getRetryCount() != null ? entity.getRetryCount() : 0;
-                if (retryCount >= maxRetries) {
+            // Retry limit check: use aggregate method
+            if (existing.isPresent() && existing.get().isFailed()) {
+                TaxInvoicePdfDocument failedDocument = existing.get();
+                if (failedDocument.isMaxRetriesExceeded(maxRetries)) {
                     log.error("Max retries ({}) exceeded for saga {} taxInvoice {}",
                             maxRetries, command.getSagaId(), command.getTaxInvoiceNumber());
                     sagaReplyPublisher.publishFailure(
-                            command.getSagaId(),
-                            command.getSagaStep(),
-                            command.getCorrelationId(),
-                            "Maximum retry attempts exceeded"
-                    );
+                            command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                            "Maximum retry attempts exceeded");
                     return;
                 }
-                // Delete the failed entity so generatePdf can create a new one
-                repository.deleteById(entity.getId());
+                // Delete the failed record so generatePdf() can create a fresh one;
+                // flush ensures the DELETE precedes the subsequent INSERT on the same taxInvoiceId.
+                repository.deleteById(failedDocument.getId());
                 repository.flush();
             }
 
@@ -94,35 +83,24 @@ public class SagaCommandHandler {
                 throw new IllegalStateException("Failed to download signed XML from " + signedXmlUrl);
             }
 
-            // Generate PDF (calls existing service)
+            // Generate PDF
             TaxInvoicePdfDocument document = pdfDocumentService.generatePdf(
                     command.getTaxInvoiceId(),
                     command.getTaxInvoiceNumber(),
                     signedXml,
-                    command.getTaxInvoiceDataJson()
-            );
+                    command.getTaxInvoiceDataJson());
 
-            // Update retry count if retrying
+            // Carry forward the retry count from the previous failed attempt
             if (existing.isPresent()) {
-                repository.findByTaxInvoiceId(command.getTaxInvoiceId()).ifPresent(entity -> {
-                    int retryCount = existing.get().getRetryCount() != null ? existing.get().getRetryCount() : 0;
-                    entity.setRetryCount(retryCount + 1);
-                    repository.save(entity);
-                });
+                document.incrementRetryCount();
+                document = repository.save(document);
             }
 
-            // Publish events via outbox
-            repository.findByTaxInvoiceId(command.getTaxInvoiceId()).ifPresent(entity ->
-                    publishEvents(entity, command));
-
-            // Send SUCCESS reply with MinIO URL for the PDF_STORAGE step
+            // Publish events and send SUCCESS reply with MinIO URL for the PDF_STORAGE step
+            publishEvents(document, command);
             sagaReplyPublisher.publishSuccess(
-                    command.getSagaId(),
-                    command.getSagaStep(),
-                    command.getCorrelationId(),
-                    document.getDocumentUrl(),
-                    (long) document.getFileSize()
-            );
+                    command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                    document.getDocumentUrl(), document.getFileSize());
 
             log.info("Successfully processed tax invoice PDF generation for saga {} taxInvoice {}",
                     command.getSagaId(), command.getTaxInvoiceNumber());
@@ -130,14 +108,9 @@ public class SagaCommandHandler {
         } catch (Exception e) {
             log.error("Failed to process tax invoice PDF generation for saga {} taxInvoice {}: {}",
                     command.getSagaId(), command.getTaxInvoiceNumber(), e.getMessage(), e);
-
-            // Send FAILURE reply
             sagaReplyPublisher.publishFailure(
-                    command.getSagaId(),
-                    command.getSagaStep(),
-                    command.getCorrelationId(),
-                    e.getMessage()
-            );
+                    command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                    e.getMessage());
         }
     }
 
@@ -151,59 +124,43 @@ public class SagaCommandHandler {
                 command.getSagaId(), command.getTaxInvoiceId());
 
         try {
-            Optional<TaxInvoicePdfDocumentEntity> existing =
+            Optional<TaxInvoicePdfDocument> existing =
                     repository.findByTaxInvoiceId(command.getTaxInvoiceId());
 
             if (existing.isPresent()) {
-                TaxInvoicePdfDocumentEntity entity = existing.get();
-                // Delete PDF file from filesystem
-                if (entity.getDocumentPath() != null) {
-                    pdfDocumentService.deletePdfFile(entity.getDocumentPath());
+                TaxInvoicePdfDocument document = existing.get();
+                if (document.getDocumentPath() != null) {
+                    pdfDocumentService.deletePdfFile(document.getDocumentPath());
                 }
-                // Delete database record
-                repository.deleteById(entity.getId());
-                log.info("Deleted TaxInvoicePdfDocument {} for compensation", entity.getId());
+                repository.deleteById(document.getId());
+                log.info("Deleted TaxInvoicePdfDocument {} for compensation", document.getId());
             } else {
                 log.info("No TaxInvoicePdfDocument found for taxInvoiceId {} - already compensated or never processed",
                         command.getTaxInvoiceId());
             }
 
-            // Send COMPENSATED reply (idempotent)
             sagaReplyPublisher.publishCompensated(
-                    command.getSagaId(),
-                    command.getSagaStep(),
-                    command.getCorrelationId()
-            );
+                    command.getSagaId(), command.getSagaStep(), command.getCorrelationId());
 
         } catch (Exception e) {
             log.error("Failed to compensate tax invoice PDF generation for saga {} taxInvoice {}: {}",
                     command.getSagaId(), command.getTaxInvoiceId(), e.getMessage(), e);
-
-            // Send FAILURE reply
             sagaReplyPublisher.publishFailure(
-                    command.getSagaId(),
-                    command.getSagaStep(),
-                    command.getCorrelationId(),
-                    "Compensation failed: " + e.getMessage()
-            );
+                    command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                    "Compensation failed: " + e.getMessage());
         }
     }
 
-    /**
-     * Publish PDF generated event to notification service.
-     * PDF signing is handled by the orchestrator via saga commands.
-     */
-    private void publishEvents(TaxInvoicePdfDocumentEntity entity, ProcessTaxInvoicePdfCommand command) {
+    private void publishEvents(TaxInvoicePdfDocument document, ProcessTaxInvoicePdfCommand command) {
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
                 command.getDocumentId(),
-                entity.getTaxInvoiceId(),
-                entity.getTaxInvoiceNumber(),
-                entity.getDocumentUrl(),
-                entity.getFileSize() != null ? entity.getFileSize() : 0,
-                entity.getXmlEmbedded(),
+                document.getTaxInvoiceId(),
+                document.getTaxInvoiceNumber(),
+                document.getDocumentUrl(),
+                document.getFileSize(),
+                document.isXmlEmbedded(),
                 command.getCorrelationId()
         );
-
         eventPublisher.publishPdfGenerated(event);
     }
 }

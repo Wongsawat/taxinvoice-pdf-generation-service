@@ -19,7 +19,7 @@ import java.util.Map;
 @Slf4j
 public class EventPublisher {
 
-    private static final String AGGREGATE_TYPE = "TaxInvoicePdfDocument";
+    private static final String AGGREGATE_TYPE = OutboxConstants.AGGREGATE_TYPE;
 
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;

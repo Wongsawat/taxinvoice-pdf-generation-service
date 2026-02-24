@@ -51,7 +51,6 @@ app:
       saga-command-tax-invoice-pdf: saga.command.tax-invoice-pdf
       saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf
       pdf-generated-tax-invoice: pdf.generated.tax-invoice
-      pdf-signing-requested: pdf.signing.requested
       dlq: pdf.generation.tax-invoice.dlq
   minio:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
@@ -61,6 +60,12 @@ app:
     region: ${MINIO_REGION:us-east-1}
     base-url: ${MINIO_BASE_URL:http://localhost:9000/taxinvoices}
     path-style-access: ${MINIO_PATH_STYLE_ACCESS:true}
+  pdf:
+    generation:
+      max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
+  rest-client:
+    connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
+    read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}
 
 # Eureka client configuration
 eureka:

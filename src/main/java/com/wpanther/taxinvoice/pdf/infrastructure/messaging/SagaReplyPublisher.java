@@ -22,7 +22,7 @@ import java.util.Map;
 public class SagaReplyPublisher {
 
     private static final String REPLY_TOPIC = "saga.reply.tax-invoice-pdf";
-    private static final String AGGREGATE_TYPE = "TaxInvoicePdfDocument";
+    private static final String AGGREGATE_TYPE = OutboxConstants.AGGREGATE_TYPE;
 
     private final OutboxService outboxService;
     private final ObjectMapper objectMapper;
@@ -47,7 +47,8 @@ public class SagaReplyPublisher {
                 toJson(headers)
         );
 
-        log.info("Published SUCCESS saga reply for saga {} step {} with pdfUrl={}", sagaId, sagaStep, pdfUrl);
+        log.info("Published SUCCESS saga reply for saga {} step {}", sagaId, sagaStep);
+        log.debug("SUCCESS reply pdfUrl={} pdfSize={}", pdfUrl, pdfSize);
     }
 
     @Transactional(propagation = Propagation.MANDATORY)

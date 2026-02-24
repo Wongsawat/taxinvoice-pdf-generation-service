@@ -294,6 +294,18 @@ public class TaxInvoicePdfDocument {
         }
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof TaxInvoicePdfDocument other)) return false;
+        return Objects.equals(id, other.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
+    }
+
     public static Builder builder() {
         return new Builder();
     }

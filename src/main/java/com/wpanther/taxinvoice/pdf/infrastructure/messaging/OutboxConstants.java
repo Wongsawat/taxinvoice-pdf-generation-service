@@ -1,0 +1,11 @@
+package com.wpanther.taxinvoice.pdf.infrastructure.messaging;
+
+/**
+ * Shared constants for outbox event publishing.
+ */
+final class OutboxConstants {
+
+    static final String AGGREGATE_TYPE = "TaxInvoicePdfDocument";
+
+    private OutboxConstants() {}
+}

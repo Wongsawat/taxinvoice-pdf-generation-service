@@ -142,8 +142,9 @@ public class TaxInvoicePdfGenerationServiceImpl implements TaxInvoicePdfGenerati
             appendElement(xml, "notes", getTextValue(root, "notes", ""));
 
         } catch (Exception e) {
-            log.warn("Failed to parse tax invoice JSON, using minimal XML: {}", e.getMessage());
-            // Provide minimal XML if JSON parsing fails
+            log.error("Failed to parse tax invoice JSON for {} — generating minimal PDF without invoice details: {}",
+                    taxInvoiceNumber, e.getMessage(), e);
+            // Provide minimal XML if JSON parsing fails; PDF will be incomplete but saga can continue
             appendElement(xml, "taxInvoiceNumber", taxInvoiceNumber);
         }
 

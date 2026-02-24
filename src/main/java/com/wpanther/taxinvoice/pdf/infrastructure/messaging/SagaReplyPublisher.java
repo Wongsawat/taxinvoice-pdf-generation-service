@@ -1,6 +1,5 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.messaging;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfReplyEvent;
 import com.wpanther.saga.domain.enums.SagaStep;
@@ -98,9 +97,8 @@ public class SagaReplyPublisher {
     private String toJson(Map<String, String> map) {
         try {
             return objectMapper.writeValueAsString(map);
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize headers to JSON", e);
-            return null;
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to serialize outbox event headers — aborting to prevent publishing without correlation headers", e);
         }
     }
 }

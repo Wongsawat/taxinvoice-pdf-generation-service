@@ -39,6 +39,9 @@ public class CamelRouteConfig extends RouteBuilder {
     @Value("${app.kafka.topics.dlq:pdf.generation.tax-invoice.dlq}")
     private String dlqTopic;
 
+    @Value("${app.kafka.consumer.group-id}")
+    private String consumerGroupId;
+
     public CamelRouteConfig(SagaCommandHandler sagaCommandHandler) {
         this.sagaCommandHandler = sagaCommandHandler;
     }
@@ -61,7 +64,7 @@ public class CamelRouteConfig extends RouteBuilder {
         // ============================================================
         from("kafka:" + sagaCommandTopic
                         + "?brokers=" + kafkaBrokers
-                        + "&groupId=taxinvoice-pdf-generation-service"
+                        + "&groupId=" + consumerGroupId
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
@@ -83,7 +86,7 @@ public class CamelRouteConfig extends RouteBuilder {
         // ============================================================
         from("kafka:" + sagaCompensationTopic
                         + "?brokers=" + kafkaBrokers
-                        + "&groupId=taxinvoice-pdf-generation-service"
+                        + "&groupId=" + consumerGroupId
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"

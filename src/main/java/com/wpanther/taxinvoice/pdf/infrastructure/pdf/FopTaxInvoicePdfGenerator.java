@@ -9,6 +9,7 @@ import org.springframework.stereotype.Component;
 
 import javax.xml.transform.Result;
 import javax.xml.transform.Source;
+import javax.xml.transform.Templates;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.sax.SAXResult;
@@ -35,11 +36,23 @@ public class FopTaxInvoicePdfGenerator {
 
     private final FopFactory fopFactory;
     private final TransformerFactory transformerFactory;
+    private final Templates cachedTemplates;
 
     public FopTaxInvoicePdfGenerator() throws Exception {
         this.fopFactory = createFopFactory();
         this.transformerFactory = TransformerFactory.newInstance();
+        this.cachedTemplates = compileTemplates(TAXINVOICE_XSL_PATH);
         log.info("FopTaxInvoicePdfGenerator initialized with config: {}", FOP_CONFIG_PATH);
+    }
+
+    private Templates compileTemplates(String xslPath) throws Exception {
+        ClassPathResource xslResource = new ClassPathResource(xslPath);
+        if (!xslResource.exists()) {
+            throw new IllegalStateException("XSL template not found at startup: " + xslPath);
+        }
+        try (InputStream is = xslResource.getInputStream()) {
+            return transformerFactory.newTemplates(new StreamSource(is));
+        }
     }
 
     private FopFactory createFopFactory() throws Exception {
@@ -68,11 +81,17 @@ public class FopTaxInvoicePdfGenerator {
      * @throws PdfGenerationException if generation fails
      */
     public byte[] generatePdf(String xmlData) throws PdfGenerationException {
-        return generatePdf(xmlData, TAXINVOICE_XSL_PATH);
+        log.debug("Generating PDF with cached template: {}", TAXINVOICE_XSL_PATH);
+        try {
+            return renderPdf(xmlData, cachedTemplates.newTransformer());
+        } catch (javax.xml.transform.TransformerConfigurationException e) {
+            throw new PdfGenerationException("Failed to create transformer from cached templates: " + e.getMessage(), e);
+        }
     }
 
     /**
      * Generate PDF from XML data using a specified XSL-FO template.
+     * Uses the cached {@link Templates} for the default path; compiles on demand otherwise.
      *
      * @param xmlData The XML representation of tax invoice data
      * @param xslPath Path to the XSL-FO template (classpath resource)
@@ -80,38 +99,38 @@ public class FopTaxInvoicePdfGenerator {
      * @throws PdfGenerationException if generation fails
      */
     public byte[] generatePdf(String xmlData, String xslPath) throws PdfGenerationException {
+        if (TAXINVOICE_XSL_PATH.equals(xslPath)) {
+            return generatePdf(xmlData);
+        }
         log.debug("Generating PDF with template: {}", xslPath);
-
-        try (ByteArrayOutputStream pdfOutput = new ByteArrayOutputStream()) {
-            // Load XSL template
+        try {
             ClassPathResource xslResource = new ClassPathResource(xslPath);
             if (!xslResource.exists()) {
                 throw new PdfGenerationException("XSL template not found: " + xslPath);
             }
+            try (InputStream is = xslResource.getInputStream()) {
+                Transformer transformer = transformerFactory.newTransformer(new StreamSource(is));
+                return renderPdf(xmlData, transformer);
+            }
+        } catch (PdfGenerationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to generate PDF", e);
+            throw new PdfGenerationException("PDF generation failed: " + e.getMessage(), e);
+        }
+    }
 
-            // Create FOP instance
+    private byte[] renderPdf(String xmlData, Transformer transformer) throws PdfGenerationException {
+        try (ByteArrayOutputStream pdfOutput = new ByteArrayOutputStream()) {
             Fop fop = fopFactory.newFop(MimeConstants.MIME_PDF, pdfOutput);
-
-            // Setup transformer with XSL
-            Source xslSource = new StreamSource(xslResource.getInputStream());
-            Transformer transformer = transformerFactory.newTransformer(xslSource);
-
-            // Setup input XML
             Source xmlSource = new StreamSource(
                 new ByteArrayInputStream(xmlData.getBytes(StandardCharsets.UTF_8))
             );
-
-            // Setup output
             Result result = new SAXResult(fop.getDefaultHandler());
-
-            // Transform
             transformer.transform(xmlSource, result);
-
             byte[] pdfBytes = pdfOutput.toByteArray();
             log.info("Generated PDF: {} bytes", pdfBytes.length);
-
             return pdfBytes;
-
         } catch (Exception e) {
             log.error("Failed to generate PDF", e);
             throw new PdfGenerationException("PDF generation failed: " + e.getMessage(), e);

@@ -2,6 +2,7 @@ package com.wpanther.taxinvoice.pdf.infrastructure.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.pdf.application.service.SagaCommandHandler;
 import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
@@ -40,7 +41,7 @@ class CamelRouteConfigTest {
     void testProcessTaxInvoicePdfCommandSerialization() throws Exception {
         // Given
         ProcessTaxInvoicePdfCommand command = new ProcessTaxInvoicePdfCommand(
-                "saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001", "TXINV-2024-001",
                 "<TaxInvoice>...</TaxInvoice>", "{}"
         );
@@ -51,7 +52,7 @@ class CamelRouteConfigTest {
 
         // Then
         assertThat(deserialized.getSagaId()).isEqualTo("saga-001");
-        assertThat(deserialized.getSagaStep()).isEqualTo("GENERATE_TAX_INVOICE_PDF");
+        assertThat(deserialized.getSagaStep()).isEqualTo(SagaStep.GENERATE_TAX_INVOICE_PDF);
         assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
         assertThat(deserialized.getTaxInvoiceId()).isEqualTo("tax-inv-001");
@@ -66,7 +67,7 @@ class CamelRouteConfigTest {
     void testCompensateTaxInvoicePdfCommandSerialization() throws Exception {
         // Given
         CompensateTaxInvoicePdfCommand command = new CompensateTaxInvoicePdfCommand(
-                "saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001"
         );
 
@@ -76,7 +77,7 @@ class CamelRouteConfigTest {
 
         // Then
         assertThat(deserialized.getSagaId()).isEqualTo("saga-001");
-        assertThat(deserialized.getSagaStep()).isEqualTo("GENERATE_TAX_INVOICE_PDF");
+        assertThat(deserialized.getSagaStep()).isEqualTo(SagaStep.GENERATE_TAX_INVOICE_PDF);
         assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
         assertThat(deserialized.getTaxInvoiceId()).isEqualTo("tax-inv-001");
@@ -106,10 +107,13 @@ class CamelRouteConfigTest {
     @DisplayName("Should create TaxInvoicePdfReplyEvent with correct status")
     void testTaxInvoicePdfReplyEventCreation() throws Exception {
         // Given
-        TaxInvoicePdfReplyEvent successReply = TaxInvoicePdfReplyEvent.success("saga-001", "step-1", "corr-456",
+        TaxInvoicePdfReplyEvent successReply = TaxInvoicePdfReplyEvent.success(
+                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "http://localhost:9000/taxinvoices/test.pdf", 12345L);
-        TaxInvoicePdfReplyEvent failureReply = TaxInvoicePdfReplyEvent.failure("saga-001", "step-1", "corr-456", "error msg");
-        TaxInvoicePdfReplyEvent compensatedReply = TaxInvoicePdfReplyEvent.compensated("saga-001", "step-1", "corr-456");
+        TaxInvoicePdfReplyEvent failureReply = TaxInvoicePdfReplyEvent.failure(
+                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456", "error msg");
+        TaxInvoicePdfReplyEvent compensatedReply = TaxInvoicePdfReplyEvent.compensated(
+                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456");
 
         // Then
         assertThat(successReply.isSuccess()).isTrue();
@@ -129,7 +133,7 @@ class CamelRouteConfigTest {
     @Test
     @DisplayName("Should deserialize ProcessTaxInvoicePdfCommand from JSON")
     void testProcessCommandDeserialization() throws Exception {
-        // Given
+        // Given - sagaStep uses kebab-case code as serialized by SagaStep @JsonValue
         String json = """
             {
                 "eventId": "550e8400-e29b-41d4-a716-446655440000",
@@ -137,7 +141,7 @@ class CamelRouteConfigTest {
                 "eventType": "saga.command.tax-invoice-pdf",
                 "version": 1,
                 "sagaId": "saga-001",
-                "sagaStep": "GENERATE_TAX_INVOICE_PDF",
+                "sagaStep": "generate-tax-invoice-pdf",
                 "correlationId": "corr-456",
                 "documentId": "doc-123",
                 "taxInvoiceId": "tax-inv-001",
@@ -153,7 +157,7 @@ class CamelRouteConfigTest {
         // Then
         assertThat(cmd.getEventId()).isEqualTo(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"));
         assertThat(cmd.getSagaId()).isEqualTo("saga-001");
-        assertThat(cmd.getSagaStep()).isEqualTo("GENERATE_TAX_INVOICE_PDF");
+        assertThat(cmd.getSagaStep()).isEqualTo(SagaStep.GENERATE_TAX_INVOICE_PDF);
         assertThat(cmd.getCorrelationId()).isEqualTo("corr-456");
         assertThat(cmd.getDocumentId()).isEqualTo("doc-123");
         assertThat(cmd.getTaxInvoiceId()).isEqualTo("tax-inv-001");

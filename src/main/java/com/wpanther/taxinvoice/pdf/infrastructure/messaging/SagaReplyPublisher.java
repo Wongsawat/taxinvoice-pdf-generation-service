@@ -3,6 +3,7 @@ package com.wpanther.taxinvoice.pdf.infrastructure.messaging;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfReplyEvent;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,7 @@ public class SagaReplyPublisher {
     private final ObjectMapper objectMapper;
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishSuccess(String sagaId, String sagaStep, String correlationId,
+    public void publishSuccess(String sagaId, SagaStep sagaStep, String correlationId,
                                String pdfUrl, Long pdfSize) {
         TaxInvoicePdfReplyEvent reply = TaxInvoicePdfReplyEvent.success(sagaId, sagaStep, correlationId, pdfUrl, pdfSize);
 
@@ -51,7 +52,7 @@ public class SagaReplyPublisher {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishFailure(String sagaId, String sagaStep, String correlationId, String errorMessage) {
+    public void publishFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
         TaxInvoicePdfReplyEvent reply = TaxInvoicePdfReplyEvent.failure(sagaId, sagaStep, correlationId, errorMessage);
 
         Map<String, String> headers = Map.of(
@@ -73,7 +74,7 @@ public class SagaReplyPublisher {
     }
 
     @Transactional(propagation = Propagation.MANDATORY)
-    public void publishCompensated(String sagaId, String sagaStep, String correlationId) {
+    public void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId) {
         TaxInvoicePdfReplyEvent reply = TaxInvoicePdfReplyEvent.compensated(sagaId, sagaStep, correlationId);
 
         Map<String, String> headers = Map.of(

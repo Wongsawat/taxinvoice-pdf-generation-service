@@ -2,7 +2,8 @@ package com.wpanther.taxinvoice.pdf.domain.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.wpanther.saga.domain.model.IntegrationEvent;
+import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.saga.domain.model.SagaCommand;
 import lombok.Getter;
 
 import java.time.Instant;
@@ -13,18 +14,9 @@ import java.util.UUID;
  * Consumed from Kafka topic: saga.command.tax-invoice-pdf
  */
 @Getter
-public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
+public class ProcessTaxInvoicePdfCommand extends SagaCommand {
 
     private static final long serialVersionUID = 1L;
-
-    @JsonProperty("sagaId")
-    private final String sagaId;
-
-    @JsonProperty("sagaStep")
-    private final String sagaStep;
-
-    @JsonProperty("correlationId")
-    private final String correlationId;
 
     @JsonProperty("documentId")
     private final String documentId;
@@ -48,17 +40,14 @@ public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
             @JsonProperty("eventType") String eventType,
             @JsonProperty("version") int version,
             @JsonProperty("sagaId") String sagaId,
-            @JsonProperty("sagaStep") String sagaStep,
+            @JsonProperty("sagaStep") SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
             @JsonProperty("documentId") String documentId,
             @JsonProperty("taxInvoiceId") String taxInvoiceId,
             @JsonProperty("taxInvoiceNumber") String taxInvoiceNumber,
             @JsonProperty("signedXmlUrl") String signedXmlUrl,
             @JsonProperty("taxInvoiceDataJson") String taxInvoiceDataJson) {
-        super(eventId, occurredAt, eventType, version);
-        this.sagaId = sagaId;
-        this.sagaStep = sagaStep;
-        this.correlationId = correlationId;
+        super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.taxInvoiceId = taxInvoiceId;
         this.taxInvoiceNumber = taxInvoiceNumber;
@@ -69,13 +58,10 @@ public class ProcessTaxInvoicePdfCommand extends IntegrationEvent {
     /**
      * Convenience constructor for testing.
      */
-    public ProcessTaxInvoicePdfCommand(String sagaId, String sagaStep, String correlationId,
+    public ProcessTaxInvoicePdfCommand(String sagaId, SagaStep sagaStep, String correlationId,
                                         String documentId, String taxInvoiceId, String taxInvoiceNumber,
                                         String signedXmlUrl, String taxInvoiceDataJson) {
-        super();
-        this.sagaId = sagaId;
-        this.sagaStep = sagaStep;
-        this.correlationId = correlationId;
+        super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
         this.taxInvoiceId = taxInvoiceId;
         this.taxInvoiceNumber = taxInvoiceNumber;

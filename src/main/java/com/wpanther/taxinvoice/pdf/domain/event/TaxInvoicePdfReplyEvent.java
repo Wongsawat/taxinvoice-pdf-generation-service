@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.pdf.domain.event;
 
 import com.wpanther.saga.domain.enums.ReplyStatus;
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.saga.domain.model.SagaReply;
 
 /**
@@ -19,7 +20,7 @@ public class TaxInvoicePdfReplyEvent extends SagaReply {
     private Long pdfSize;
 
     public static TaxInvoicePdfReplyEvent success(
-            String sagaId, String sagaStep, String correlationId,
+            String sagaId, SagaStep sagaStep, String correlationId,
             String pdfUrl, Long pdfSize) {
         TaxInvoicePdfReplyEvent reply = new TaxInvoicePdfReplyEvent(sagaId, sagaStep, correlationId, ReplyStatus.SUCCESS);
         reply.pdfUrl = pdfUrl;
@@ -27,20 +28,20 @@ public class TaxInvoicePdfReplyEvent extends SagaReply {
         return reply;
     }
 
-    public static TaxInvoicePdfReplyEvent failure(String sagaId, String sagaStep, String correlationId,
+    public static TaxInvoicePdfReplyEvent failure(String sagaId, SagaStep sagaStep, String correlationId,
                                                   String errorMessage) {
         return new TaxInvoicePdfReplyEvent(sagaId, sagaStep, correlationId, errorMessage);
     }
 
-    public static TaxInvoicePdfReplyEvent compensated(String sagaId, String sagaStep, String correlationId) {
+    public static TaxInvoicePdfReplyEvent compensated(String sagaId, SagaStep sagaStep, String correlationId) {
         return new TaxInvoicePdfReplyEvent(sagaId, sagaStep, correlationId, ReplyStatus.COMPENSATED);
     }
 
-    private TaxInvoicePdfReplyEvent(String sagaId, String sagaStep, String correlationId, ReplyStatus status) {
+    private TaxInvoicePdfReplyEvent(String sagaId, SagaStep sagaStep, String correlationId, ReplyStatus status) {
         super(sagaId, sagaStep, correlationId, status);
     }
 
-    private TaxInvoicePdfReplyEvent(String sagaId, String sagaStep, String correlationId, String errorMessage) {
+    private TaxInvoicePdfReplyEvent(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
         super(sagaId, sagaStep, correlationId, errorMessage);
     }
 

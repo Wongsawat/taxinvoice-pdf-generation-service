@@ -1,5 +1,6 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
@@ -56,7 +57,7 @@ class SagaCommandHandlerTest {
 
     private ProcessTaxInvoicePdfCommand createProcessCommand() {
         return new ProcessTaxInvoicePdfCommand(
-                "saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001", "TXINV-2024-001",
                 SIGNED_XML_URL, "{}"
         );
@@ -64,7 +65,7 @@ class SagaCommandHandlerTest {
 
     private CompensateTaxInvoicePdfCommand createCompensateCommand() {
         return new CompensateTaxInvoicePdfCommand(
-                "saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001"
         );
     }
@@ -112,7 +113,7 @@ class SagaCommandHandlerTest {
                 SIGNED_XML_CONTENT, "{}");
         verify(eventPublisher).publishPdfGenerated(any());
 
-        verify(sagaReplyPublisher).publishSuccess("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+        verify(sagaReplyPublisher).publishSuccess("saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf", 12345L);
     }
 
@@ -131,7 +132,7 @@ class SagaCommandHandlerTest {
         verify(pdfDocumentService, never()).generatePdf(anyString(), anyString(), anyString(), anyString());
         verify(eventPublisher).publishPdfGenerated(any());
 
-        verify(sagaReplyPublisher).publishSuccess(eq("saga-001"), eq("GENERATE_TAX_INVOICE_PDF"), eq("corr-456"),
+        verify(sagaReplyPublisher).publishSuccess(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF), eq("corr-456"),
                 eq("http://localhost:8084/documents/test.pdf"), eq(12345L));
     }
 
@@ -155,7 +156,7 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(pdfDocumentService, never()).generatePdf(anyString(), anyString(), anyString(), anyString());
-        verify(sagaReplyPublisher).publishFailure("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456",
+        verify(sagaReplyPublisher).publishFailure("saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "Maximum retry attempts exceeded");
     }
 
@@ -174,7 +175,7 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleProcessCommand(command);
 
         // Then
-        verify(sagaReplyPublisher).publishFailure(eq("saga-001"), eq("GENERATE_TAX_INVOICE_PDF"),
+        verify(sagaReplyPublisher).publishFailure(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF),
                 eq("corr-456"), anyString());
     }
 
@@ -193,7 +194,7 @@ class SagaCommandHandlerTest {
         // Then
         verify(pdfDocumentService).deletePdfFile(entity.getDocumentPath());
         verify(repository).deleteById(entity.getId());
-        verify(sagaReplyPublisher).publishCompensated("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456");
+        verify(sagaReplyPublisher).publishCompensated("saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456");
     }
 
     @Test
@@ -210,7 +211,7 @@ class SagaCommandHandlerTest {
         // Then
         verify(pdfDocumentService, never()).deletePdfFile(anyString());
         verify(repository, never()).deleteById(any());
-        verify(sagaReplyPublisher).publishCompensated("saga-001", "GENERATE_TAX_INVOICE_PDF", "corr-456");
+        verify(sagaReplyPublisher).publishCompensated("saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456");
     }
 
     @Test
@@ -228,7 +229,7 @@ class SagaCommandHandlerTest {
         sagaCommandHandler.handleCompensation(command);
 
         // Then
-        verify(sagaReplyPublisher).publishFailure(eq("saga-001"), eq("GENERATE_TAX_INVOICE_PDF"),
+        verify(sagaReplyPublisher).publishFailure(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF),
                 eq("corr-456"), contains("Compensation failed"));
     }
 }

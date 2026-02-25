@@ -63,8 +63,7 @@ public class CamelRouteConfig extends RouteBuilder {
         // CONSUMER ROUTE: saga.command.tax-invoice-pdf (from orchestrator)
         // ============================================================
         from("kafka:" + sagaCommandTopic
-                        + "?brokers=" + kafkaBrokers
-                        + "&groupId=" + consumerGroupId
+                        + "?groupId=" + consumerGroupId
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"
@@ -85,8 +84,7 @@ public class CamelRouteConfig extends RouteBuilder {
         // CONSUMER ROUTE: saga.compensation.tax-invoice-pdf (from orchestrator)
         // ============================================================
         from("kafka:" + sagaCompensationTopic
-                        + "?brokers=" + kafkaBrokers
-                        + "&groupId=" + consumerGroupId
+                        + "?groupId=" + consumerGroupId
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError=true"

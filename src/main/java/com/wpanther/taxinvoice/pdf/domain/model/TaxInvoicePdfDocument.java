@@ -295,6 +295,17 @@ public class TaxInvoicePdfDocument {
     }
 
     @Override
+    public String toString() {
+        return "TaxInvoicePdfDocument{" +
+                "id=" + id +
+                ", taxInvoiceId='" + taxInvoiceId + '\'' +
+                ", taxInvoiceNumber='" + taxInvoiceNumber + '\'' +
+                ", status=" + status +
+                ", retryCount=" + retryCount +
+                '}';
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof TaxInvoicePdfDocument other)) return false;

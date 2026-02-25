@@ -144,11 +144,16 @@ public class SagaCommandHandler {
 
                 if (existing.isPresent()) {
                     TaxInvoicePdfDocument document = existing.get();
+                    // DB delete first: if this fails the transaction rolls back and the S3 object
+                    // remains intact — no orphaned DB record pointing to a missing file.
+                    // If DB delete succeeds but S3 delete fails below, we have an unreferenced S3
+                    // object. That is the lesser evil: it causes no functional harm and can be
+                    // cleaned up by a MinIO lifecycle expiry rule.
+                    repository.deleteById(document.getId());
                     if (document.getDocumentPath() != null) {
                         pdfDocumentService.deletePdfFile(document.getDocumentPath());
                     }
-                    repository.deleteById(document.getId());
-                    log.info("Deleted TaxInvoicePdfDocument {} for compensation", document.getId());
+                    log.info("Compensated TaxInvoicePdfDocument {} for saga {}", document.getId(), command.getSagaId());
                 } else {
                     log.info("No TaxInvoicePdfDocument found for taxInvoiceId {} - already compensated or never processed",
                             command.getTaxInvoiceId());

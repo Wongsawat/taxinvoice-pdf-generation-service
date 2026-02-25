@@ -16,9 +16,9 @@ import javax.xml.transform.sax.SAXResult;
 import javax.xml.transform.stream.StreamSource;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.InputStream;
 import java.net.URI;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 
 /**
@@ -56,20 +56,40 @@ public class FopTaxInvoicePdfGenerator {
     }
 
     private FopFactory createFopFactory() throws Exception {
+        URI baseUri = resolveBaseUri();
         try {
             ClassPathResource configResource = new ClassPathResource(FOP_CONFIG_PATH);
             if (configResource.exists()) {
                 try (InputStream configStream = configResource.getInputStream()) {
-                    URI baseUri = new File(".").toURI();
                     return FopFactory.newInstance(baseUri, configStream);
                 }
             } else {
                 log.warn("FOP config not found at {}, using default configuration", FOP_CONFIG_PATH);
-                return FopFactory.newInstance(new File(".").toURI());
+                return FopFactory.newInstance(baseUri);
             }
         } catch (Exception e) {
             log.warn("Failed to load FOP config, using default: {}", e.getMessage());
-            return FopFactory.newInstance(new File(".").toURI());
+            return FopFactory.newInstance(baseUri);
+        }
+    }
+
+    /**
+     * Resolve the FOP base URI used for resolving relative font paths in fop.xconf.
+     *
+     * <p>Tries the classpath root first (works for both exploded and JAR deployments
+     * when fonts are inside BOOT-INF/classes/fonts/). Falls back to the JVM working
+     * directory if the classpath root URL cannot be resolved to a URI.</p>
+     */
+    private URI resolveBaseUri() {
+        try {
+            URL classpathRoot = new ClassPathResource("").getURL();
+            URI uri = classpathRoot.toURI();
+            log.debug("FOP base URI resolved to: {}", uri);
+            return uri;
+        } catch (Exception e) {
+            log.warn("Could not resolve classpath root URI for FOP, falling back to working directory: {}",
+                    e.getMessage());
+            return URI.create("file:" + System.getProperty("user.dir", ".") + "/");
         }
     }
 

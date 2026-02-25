@@ -76,8 +76,11 @@ public class TaxInvoicePdfDocumentService {
         } catch (Exception e) {
             log.error("Failed to generate PDF for tax invoice: {}", taxInvoiceNumber, e);
             document.markFailed(e.getMessage());
-            repository.save(document);
-            throw new RuntimeException("Tax invoice PDF generation failed", e);
+            // Return the FAILED document — do NOT re-throw.
+            // Re-throwing a RuntimeException here would mark the shared @Transactional(REQUIRED)
+            // transaction as rollback-only, preventing the caller from committing the FAILURE
+            // saga reply to the outbox in the same transaction.
+            return repository.save(document);
         }
     }
 

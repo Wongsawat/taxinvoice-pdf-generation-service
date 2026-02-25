@@ -91,16 +91,36 @@ public class SagaCommandHandler {
                     throw new IllegalStateException("Failed to download signed XML from " + signedXmlUrl);
                 }
 
-                // Generate PDF
+                // Generate PDF — never throws; returns document in COMPLETED or FAILED state
                 TaxInvoicePdfDocument document = pdfDocumentService.generatePdf(
                         command.getTaxInvoiceId(),
                         command.getTaxInvoiceNumber(),
                         signedXml,
                         command.getTaxInvoiceDataJson());
 
-                // Carry forward the retry count from the previous failed attempt
+                // If generation failed, persist the correct retry count and send FAILURE reply
+                if (document.isFailed()) {
+                    if (existing.isPresent()) {
+                        int targetCount = existing.get().getRetryCount() + 1;
+                        while (document.getRetryCount() < targetCount) {
+                            document.incrementRetryCount();
+                        }
+                        repository.save(document);
+                    }
+                    sagaReplyPublisher.publishFailure(
+                            command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                            document.getErrorMessage());
+                    return;
+                }
+
+                // Carry forward the retry count from the previous failed attempt.
+                // The new document starts at retryCount=0; set it to previousCount+1
+                // so isMaxRetriesExceeded() fires correctly on the next saga retry.
                 if (existing.isPresent()) {
-                    document.incrementRetryCount();
+                    int targetCount = existing.get().getRetryCount() + 1;
+                    while (document.getRetryCount() < targetCount) {
+                        document.incrementRetryCount();
+                    }
                     document = repository.save(document);
                 }
 

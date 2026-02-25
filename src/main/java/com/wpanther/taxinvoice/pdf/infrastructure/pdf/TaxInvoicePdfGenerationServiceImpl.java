@@ -67,86 +67,78 @@ public class TaxInvoicePdfGenerationServiceImpl implements TaxInvoicePdfGenerati
         xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         xml.append("<taxInvoice>\n");
 
-        try {
-            JsonNode root = objectMapper.readTree(taxInvoiceDataJson);
+        JsonNode root = objectMapper.readTree(taxInvoiceDataJson);
 
-            // Tax invoice header
-            appendElement(xml, "taxInvoiceNumber", getTextValue(root, "taxInvoiceNumber", taxInvoiceNumber));
-            appendElement(xml, "taxInvoiceDate", getTextValue(root, "taxInvoiceDate", ""));
-            appendElement(xml, "dueDate", getTextValue(root, "dueDate", ""));
-            appendElement(xml, "documentType", getTextValue(root, "documentType", "TAX_INVOICE"));
-            appendElement(xml, "purchaseOrderNumber", getTextValue(root, "purchaseOrderNumber", ""));
+        // Tax invoice header
+        appendElement(xml, "taxInvoiceNumber", getTextValue(root, "taxInvoiceNumber", taxInvoiceNumber));
+        appendElement(xml, "taxInvoiceDate", getTextValue(root, "taxInvoiceDate", ""));
+        appendElement(xml, "dueDate", getTextValue(root, "dueDate", ""));
+        appendElement(xml, "documentType", getTextValue(root, "documentType", "TAX_INVOICE"));
+        appendElement(xml, "purchaseOrderNumber", getTextValue(root, "purchaseOrderNumber", ""));
 
-            // Seller information
-            xml.append("  <seller>\n");
-            JsonNode seller = root.path("seller");
-            appendElement(xml, "name", getTextValue(seller, "name", ""), 4);
-            appendElement(xml, "taxId", getTextValue(seller, "taxId", ""), 4);
-            appendElement(xml, "branchId", getTextValue(seller, "branchId", ""), 4);
-            appendElement(xml, "branchName", getTextValue(seller, "branchName", ""), 4);
-            appendElement(xml, "address", getTextValue(seller, "address", ""), 4);
-            appendElement(xml, "phone", getTextValue(seller, "phone", ""), 4);
-            appendElement(xml, "email", getTextValue(seller, "email", ""), 4);
-            xml.append("  </seller>\n");
+        // Seller information
+        xml.append("  <seller>\n");
+        JsonNode seller = root.path("seller");
+        appendElement(xml, "name", getTextValue(seller, "name", ""), 4);
+        appendElement(xml, "taxId", getTextValue(seller, "taxId", ""), 4);
+        appendElement(xml, "branchId", getTextValue(seller, "branchId", ""), 4);
+        appendElement(xml, "branchName", getTextValue(seller, "branchName", ""), 4);
+        appendElement(xml, "address", getTextValue(seller, "address", ""), 4);
+        appendElement(xml, "phone", getTextValue(seller, "phone", ""), 4);
+        appendElement(xml, "email", getTextValue(seller, "email", ""), 4);
+        xml.append("  </seller>\n");
 
-            // Buyer information
-            xml.append("  <buyer>\n");
-            JsonNode buyer = root.path("buyer");
-            appendElement(xml, "name", getTextValue(buyer, "name", ""), 4);
-            appendElement(xml, "taxId", getTextValue(buyer, "taxId", ""), 4);
-            appendElement(xml, "branchId", getTextValue(buyer, "branchId", ""), 4);
-            appendElement(xml, "branchName", getTextValue(buyer, "branchName", ""), 4);
-            appendElement(xml, "address", getTextValue(buyer, "address", ""), 4);
-            appendElement(xml, "phone", getTextValue(buyer, "phone", ""), 4);
-            appendElement(xml, "email", getTextValue(buyer, "email", ""), 4);
-            xml.append("  </buyer>\n");
+        // Buyer information
+        xml.append("  <buyer>\n");
+        JsonNode buyer = root.path("buyer");
+        appendElement(xml, "name", getTextValue(buyer, "name", ""), 4);
+        appendElement(xml, "taxId", getTextValue(buyer, "taxId", ""), 4);
+        appendElement(xml, "branchId", getTextValue(buyer, "branchId", ""), 4);
+        appendElement(xml, "branchName", getTextValue(buyer, "branchName", ""), 4);
+        appendElement(xml, "address", getTextValue(buyer, "address", ""), 4);
+        appendElement(xml, "phone", getTextValue(buyer, "phone", ""), 4);
+        appendElement(xml, "email", getTextValue(buyer, "email", ""), 4);
+        xml.append("  </buyer>\n");
 
-            // Line items
-            xml.append("  <lineItems>\n");
-            JsonNode lineItems = root.path("lineItems");
-            if (lineItems.isArray()) {
-                for (JsonNode item : lineItems) {
-                    xml.append("    <item>\n");
-                    appendElement(xml, "itemCode", getTextValue(item, "itemCode", ""), 6);
-                    appendElement(xml, "description", getTextValue(item, "description", ""), 6);
-                    appendElement(xml, "quantity", getTextValue(item, "quantity", "0"), 6);
-                    appendElement(xml, "unit", getTextValue(item, "unit", ""), 6);
-                    appendElement(xml, "unitPrice", getTextValue(item, "unitPrice", "0"), 6);
-                    appendElement(xml, "amount", getTextValue(item, "amount", "0"), 6);
-                    xml.append("    </item>\n");
-                }
+        // Line items
+        xml.append("  <lineItems>\n");
+        JsonNode lineItems = root.path("lineItems");
+        if (lineItems.isArray()) {
+            for (JsonNode item : lineItems) {
+                xml.append("    <item>\n");
+                appendElement(xml, "itemCode", getTextValue(item, "itemCode", ""), 6);
+                appendElement(xml, "description", getTextValue(item, "description", ""), 6);
+                appendElement(xml, "quantity", getTextValue(item, "quantity", "0"), 6);
+                appendElement(xml, "unit", getTextValue(item, "unit", ""), 6);
+                appendElement(xml, "unitPrice", getTextValue(item, "unitPrice", "0"), 6);
+                appendElement(xml, "amount", getTextValue(item, "amount", "0"), 6);
+                xml.append("    </item>\n");
             }
-            xml.append("  </lineItems>\n");
-
-            // Totals
-            appendElement(xml, "subtotal", getTextValue(root, "subtotal", "0"));
-            appendElement(xml, "discount", getTextValue(root, "discount", "0"));
-            appendElement(xml, "amountBeforeVat", getTextValue(root, "amountBeforeVat", "0"));
-            appendElement(xml, "vatRate", getTextValue(root, "vatRate", "7"));
-            appendElement(xml, "vatAmount", getTextValue(root, "vatAmount", "0"));
-            appendElement(xml, "grandTotal", getTextValue(root, "grandTotal", "0"));
-            appendElement(xml, "amountInWords", getTextValue(root, "amountInWords", ""));
-
-            // Payment information (optional)
-            JsonNode paymentInfo = root.path("paymentInfo");
-            if (!paymentInfo.isMissingNode()) {
-                xml.append("  <paymentInfo>\n");
-                appendElement(xml, "method", getTextValue(paymentInfo, "method", ""), 4);
-                appendElement(xml, "bankName", getTextValue(paymentInfo, "bankName", ""), 4);
-                appendElement(xml, "accountNumber", getTextValue(paymentInfo, "accountNumber", ""), 4);
-                appendElement(xml, "accountName", getTextValue(paymentInfo, "accountName", ""), 4);
-                xml.append("  </paymentInfo>\n");
-            }
-
-            // Notes
-            appendElement(xml, "notes", getTextValue(root, "notes", ""));
-
-        } catch (Exception e) {
-            log.error("Failed to parse tax invoice JSON for {} — generating minimal PDF without invoice details: {}",
-                    taxInvoiceNumber, e.getMessage(), e);
-            // Provide minimal XML if JSON parsing fails; PDF will be incomplete but saga can continue
-            appendElement(xml, "taxInvoiceNumber", taxInvoiceNumber);
         }
+        xml.append("  </lineItems>\n");
+
+        // Totals
+        appendElement(xml, "subtotal", getTextValue(root, "subtotal", "0"));
+        appendElement(xml, "discount", getTextValue(root, "discount", "0"));
+        appendElement(xml, "amountBeforeVat", getTextValue(root, "amountBeforeVat", "0"));
+        appendElement(xml, "vatRate", getTextValue(root, "vatRate", "7"));
+        appendElement(xml, "vatAmount", getTextValue(root, "vatAmount", "0"));
+        appendElement(xml, "grandTotal", getTextValue(root, "grandTotal", "0"));
+        appendElement(xml, "amountInWords", getTextValue(root, "amountInWords", ""));
+
+        // Payment information (optional)
+        JsonNode paymentInfo = root.path("paymentInfo");
+        if (!paymentInfo.isMissingNode()) {
+            xml.append("  <paymentInfo>\n");
+            appendElement(xml, "method", getTextValue(paymentInfo, "method", ""), 4);
+            appendElement(xml, "bankName", getTextValue(paymentInfo, "bankName", ""), 4);
+            appendElement(xml, "accountNumber", getTextValue(paymentInfo, "accountNumber", ""), 4);
+            appendElement(xml, "accountName", getTextValue(paymentInfo, "accountName", ""), 4);
+            xml.append("  </paymentInfo>\n");
+        }
+
+        // Notes
+        appendElement(xml, "notes", getTextValue(root, "notes", ""));
 
         xml.append("</taxInvoice>\n");
         return xml.toString();

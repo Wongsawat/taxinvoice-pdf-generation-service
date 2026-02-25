@@ -66,13 +66,14 @@ class TaxInvoicePdfGenerationServiceImplTest {
     }
 
     @Test
-    @DisplayName("generatePdf() with minimal JSON still produces XML with tax invoice number")
+    @DisplayName("generatePdf() with minimal valid JSON ({}) still produces XML")
     void testGeneratePdf_MinimalJson() throws Exception {
         byte[] basePdf = new byte[500];
         when(fopPdfGenerator.generatePdf(anyString())).thenReturn(basePdf);
         when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any()))
                 .thenReturn(new byte[600]);
 
+        // "{}" is valid JSON with no fields; all values default — should succeed
         service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, MINIMAL_JSON);
 
         ArgumentCaptor<String> xmlCaptor = ArgumentCaptor.forClass(String.class);
@@ -80,6 +81,18 @@ class TaxInvoicePdfGenerationServiceImplTest {
         assertThat(xmlCaptor.getValue())
                 .contains("<taxInvoice>")
                 .contains(TAX_INVOICE_NUMBER);
+    }
+
+    @Test
+    @DisplayName("generatePdf() throws TaxInvoicePdfGenerationException when taxInvoiceDataJson is invalid JSON")
+    void testGeneratePdf_InvalidJson_Throws() {
+        // Invalid JSON must fail fast — no silent degradation to a blank PDF
+        assertThatThrownBy(() ->
+                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, "not-valid-json"))
+                .isInstanceOf(TaxInvoicePdfGenerationException.class);
+
+        verifyNoInteractions(fopPdfGenerator);
+        verifyNoInteractions(pdfA3Converter);
     }
 
     @Test

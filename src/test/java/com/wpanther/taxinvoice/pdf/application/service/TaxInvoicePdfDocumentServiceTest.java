@@ -86,24 +86,18 @@ class TaxInvoicePdfDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("generatePdf() marks document FAILED and rethrows when PDF generation throws")
+    @DisplayName("generatePdf() returns FAILED document without throwing when PDF generation fails")
     void testGeneratePdf_PdfGenerationFails() throws Exception {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
                 .thenThrow(new TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException(
                         "FOP failed", null));
 
-        assertThatThrownBy(() ->
-                service.generatePdf("tax-inv-001", "TXINV-001", "<xml/>", "{}"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Tax invoice PDF generation failed");
+        // Must NOT throw — caller relies on the returned FAILED document to publish the saga reply
+        TaxInvoicePdfDocument result = service.generatePdf("tax-inv-001", "TXINV-001", "<xml/>", "{}");
 
-        // Repository should have saved a FAILED document
-        ArgumentCaptor<TaxInvoicePdfDocument> captor = ArgumentCaptor.forClass(TaxInvoicePdfDocument.class);
-        verify(repository, atLeastOnce()).save(captor.capture());
-        boolean hasFailed = captor.getAllValues().stream()
-                .anyMatch(d -> d.getStatus() == GenerationStatus.FAILED);
-        assertThat(hasFailed).isTrue();
+        assertThat(result.getStatus()).isEqualTo(GenerationStatus.FAILED);
+        assertThat(result.getErrorMessage()).isNotBlank();
     }
 
     @Test

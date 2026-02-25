@@ -18,9 +18,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
+import org.mockito.ArgumentCaptor;
+
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -154,21 +157,69 @@ class SagaCommandHandlerTest {
     }
 
     @Test
-    @DisplayName("Should send FAILURE reply when PDF generation fails")
+    @DisplayName("Should send FAILURE reply when PDF generation returns FAILED document")
     void testHandleProcessCommand_GenerationFails() {
         // Given
         ProcessTaxInvoicePdfCommand command = createProcessCommand();
         when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
         when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+
+        TaxInvoicePdfDocument failedDoc = TaxInvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-2024-001")
+                .status(GenerationStatus.FAILED)
+                .errorMessage("FOP transform failed")
+                .retryCount(0)
+                .build();
         when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
-                .thenThrow(new RuntimeException("PDF generation error"));
+                .thenReturn(failedDoc);
 
         // When
         sagaCommandHandler.handleProcessCommand(command);
 
-        // Then
+        // Then — FAILURE reply published with the error message from the document
+        verify(eventPublisher, never()).publishPdfGenerated(any());
         verify(sagaReplyPublisher).publishFailure(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF),
-                eq("corr-456"), anyString());
+                eq("corr-456"), eq("FOP transform failed"));
+    }
+
+    @Test
+    @DisplayName("Should carry forward retry count correctly from previous failed attempt")
+    void testHandleProcessCommand_RetryCountCarriedForward() {
+        // Given — previous failed attempt with retryCount=1
+        ProcessTaxInvoicePdfCommand command = createProcessCommand();
+        TaxInvoicePdfDocument previousFailed = TaxInvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-2024-001")
+                .status(GenerationStatus.FAILED)
+                .retryCount(1)
+                .build();
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(previousFailed));
+        when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
+
+        TaxInvoicePdfDocument newDocument = TaxInvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-2024-001")
+                .status(GenerationStatus.COMPLETED)
+                .documentUrl("http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf")
+                .fileSize(5000L)
+                .retryCount(0) // starts at 0, must be set to 2
+                .build();
+        when(pdfDocumentService.generatePdf(anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(newDocument);
+        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // When
+        sagaCommandHandler.handleProcessCommand(command);
+
+        // Then — document saved with retryCount = previousFailed.retryCount + 1 = 2
+        ArgumentCaptor<TaxInvoicePdfDocument> captor = ArgumentCaptor.forClass(TaxInvoicePdfDocument.class);
+        verify(repository).save(captor.capture());
+        assertThat(captor.getValue().getRetryCount()).isEqualTo(2);
+        verify(sagaReplyPublisher).publishSuccess(anyString(), any(), anyString(), anyString(), anyLong());
     }
 
     @Test

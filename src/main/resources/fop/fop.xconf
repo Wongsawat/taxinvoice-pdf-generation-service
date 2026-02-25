@@ -66,11 +66,11 @@
                     <font-triplet name="THSarabunNew" style="italic" weight="bold"/>
                 </font>
 
-                <!-- Noto Sans Thai - Google font with Thai support -->
-                <font kerning="yes" embed-url="fonts/NotoSansThai-Regular.ttf">
+                <!-- Noto Sans Thai Looped - Google font with Thai support (looped/traditional style) -->
+                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Regular.ttf">
                     <font-triplet name="NotoSansThai" style="normal" weight="normal"/>
                 </font>
-                <font kerning="yes" embed-url="fonts/NotoSansThai-Bold.ttf">
+                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Bold.ttf">
                     <font-triplet name="NotoSansThai" style="normal" weight="bold"/>
                 </font>
             </fonts>

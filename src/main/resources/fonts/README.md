@@ -1,11 +1,24 @@
 # Thai Fonts for Tax Invoice PDF Generation
 
-This directory should contain Thai fonts for PDF/A-3 generation.
+This directory contains Thai fonts for PDF/A-3 generation.
 
-## Required Fonts
+## Installed Fonts
 
-### Option 1: TH Sarabun New (Recommended)
-Official Thai government font, free to use.
+### Noto Sans Thai Looped (active)
+Google's open source font with excellent Thai support. Uses traditional looped letterforms, suitable for formal/business documents.
+
+Download from: https://fonts.google.com/noto/specimen/Noto+Sans+Thai+Looped
+
+Installed files:
+- `NotoSansThaiLooped-Regular.ttf` (Regular)
+- `NotoSansThaiLooped-Bold.ttf` (Bold)
+
+Registered in `fop.xconf` under the font-triplet name `NotoSansThai`.
+
+## Alternative Fonts
+
+### TH Sarabun New
+Official Thai government font, free to use. Add these files to this directory and register them in `fop.xconf` to use instead.
 
 Download from: https://www.f0nt.com/release/th-sarabun-new/
 
@@ -15,20 +28,7 @@ Required files:
 - `THSarabunNew-Italic.ttf` (Italic)
 - `THSarabunNew-BoldItalic.ttf` (Bold Italic)
 
-### Option 2: Noto Sans Thai (Alternative)
-Google's open source font with excellent Thai support.
-
-Download from: https://fonts.google.com/noto/specimen/Noto+Sans+Thai
-
-Required files:
-- `NotoSansThai-Regular.ttf`
-- `NotoSansThai-Bold.ttf`
-
-## Installation
-
-1. Download the font files from one of the sources above
-2. Copy the `.ttf` files to this directory
-3. Rebuild the application
+If installed, `taxinvoice.xsl` will prefer TH Sarabun New first (it appears first in the `font-family` fallback chain).
 
 ## Docker Usage
 
@@ -47,4 +47,4 @@ RUN apk add --no-cache font-noto font-noto-thai
 ## License
 
 - TH Sarabun New: Public Domain (Thai Government)
-- Noto Sans Thai: SIL Open Font License
+- Noto Sans Thai Looped: SIL Open Font License 1.1

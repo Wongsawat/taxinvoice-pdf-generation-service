@@ -100,16 +100,12 @@ public class SagaCommandHandler {
 
                 // If generation failed, persist the correct retry count and send FAILURE reply
                 if (document.isFailed()) {
-                    if (existing.isPresent()) {
-                        int targetCount = existing.get().getRetryCount() + 1;
-                        while (document.getRetryCount() < targetCount) {
-                            document.incrementRetryCount();
-                        }
-                        repository.save(document);
-                    }
+                    carryForwardRetryCount(document, existing);
                     sagaReplyPublisher.publishFailure(
                             command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                            document.getErrorMessage());
+                            document.getErrorMessage() != null
+                                    ? document.getErrorMessage()
+                                    : "PDF generation failed");
                     return;
                 }
 
@@ -117,10 +113,7 @@ public class SagaCommandHandler {
                 // The new document starts at retryCount=0; set it to previousCount+1
                 // so isMaxRetriesExceeded() fires correctly on the next saga retry.
                 if (existing.isPresent()) {
-                    int targetCount = existing.get().getRetryCount() + 1;
-                    while (document.getRetryCount() < targetCount) {
-                        document.incrementRetryCount();
-                    }
+                    carryForwardRetryCount(document, existing);
                     document = repository.save(document);
                 }
 
@@ -138,7 +131,7 @@ public class SagaCommandHandler {
                         command.getSagaId(), command.getTaxInvoiceNumber(), e.getMessage(), e);
                 sagaReplyPublisher.publishFailure(
                         command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        e.getClass().getSimpleName() + ": " + e.getMessage());
+                        describeException(e));
             }
         } finally {
             MDC.clear();
@@ -187,11 +180,33 @@ public class SagaCommandHandler {
                         command.getSagaId(), command.getTaxInvoiceId(), e.getMessage(), e);
                 sagaReplyPublisher.publishFailure(
                         command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        "Compensation failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                        "Compensation failed: " + describeException(e));
             }
         } finally {
             MDC.clear();
         }
+    }
+
+    /**
+     * Carry forward the retry count from the previous (deleted) failed document to the
+     * replacement document. The replacement always starts at retryCount=0; incrementing
+     * to previousCount+1 ensures isMaxRetriesExceeded() fires on the correct attempt.
+     */
+    private void carryForwardRetryCount(TaxInvoicePdfDocument document,
+                                        Optional<TaxInvoicePdfDocument> previous) {
+        if (previous.isEmpty()) {
+            return;
+        }
+        int targetCount = previous.get().getRetryCount() + 1;
+        while (document.getRetryCount() < targetCount) {
+            document.incrementRetryCount();
+        }
+    }
+
+    /** Returns a non-null, human-readable description of an exception for saga reply messages. */
+    private String describeException(Exception e) {
+        String message = e.getMessage();
+        return e.getClass().getSimpleName() + (message != null ? ": " + message : "");
     }
 
     private void publishEvents(TaxInvoicePdfDocument document, ProcessTaxInvoicePdfCommand command) {

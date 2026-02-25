@@ -75,7 +75,8 @@ public class TaxInvoicePdfDocumentService {
 
         } catch (Exception e) {
             log.error("Failed to generate PDF for tax invoice: {}", taxInvoiceNumber, e);
-            document.markFailed(e.getMessage());
+            String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+            document.markFailed(reason);
             // Return the FAILED document — do NOT re-throw.
             // Re-throwing a RuntimeException here would mark the shared @Transactional(REQUIRED)
             // transaction as rollback-only, preventing the caller from committing the FAILURE

@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.persistence;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.persistence;
 
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
@@ -15,7 +15,7 @@ import java.util.UUID;
  */
 @Repository
 @RequiredArgsConstructor
-public class JpaTaxInvoicePdfDocumentRepositoryImpl implements TaxInvoicePdfDocumentRepository {
+public class TaxInvoicePdfDocumentRepositoryAdapter implements TaxInvoicePdfDocumentRepository {
 
     private final JpaTaxInvoicePdfDocumentRepository jpaRepository;
 

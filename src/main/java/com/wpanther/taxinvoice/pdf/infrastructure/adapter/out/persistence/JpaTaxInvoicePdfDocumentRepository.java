@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.persistence;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.persistence;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;

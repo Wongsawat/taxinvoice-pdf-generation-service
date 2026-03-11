@@ -1,13 +1,13 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
 import com.wpanther.saga.domain.enums.SagaStep;
-import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
-import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.infrastructure.messaging.EventPublisher;
-import com.wpanther.taxinvoice.pdf.infrastructure.messaging.SagaReplyPublisher;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.EventPublisher;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.SagaReplyPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -57,16 +57,16 @@ class SagaCommandHandlerTest {
     private static final String SIGNED_XML_URL = "http://minio:9000/signed/taxinvoice-signed.xml";
     private static final String SIGNED_XML_CONTENT = "<TaxInvoice>signed</TaxInvoice>";
 
-    private ProcessTaxInvoicePdfCommand createProcessCommand() {
-        return new ProcessTaxInvoicePdfCommand(
+    private KafkaTaxInvoiceProcessCommand createProcessCommand() {
+        return new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001", "TXINV-2024-001",
                 SIGNED_XML_URL, "{}"
         );
     }
 
-    private CompensateTaxInvoicePdfCommand createCompensateCommand() {
-        return new CompensateTaxInvoicePdfCommand(
+    private KafkaTaxInvoiceCompensateCommand createCompensateCommand() {
+        return new KafkaTaxInvoiceCompensateCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001"
         );
@@ -91,7 +91,7 @@ class SagaCommandHandlerTest {
     @DisplayName("Should generate PDF and send SUCCESS reply")
     void testHandleProcessCommand_Success() {
         // Given
-        ProcessTaxInvoicePdfCommand command = createProcessCommand();
+        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
         when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
 
@@ -106,7 +106,7 @@ class SagaCommandHandlerTest {
                 .thenReturn(document);
 
         // When
-        sagaCommandHandler.handleProcessCommand(command);
+        sagaCommandHandler.handle(command);
 
         // Then
         verify(pdfDocumentService).generatePdf("tax-inv-001", "TXINV-2024-001", SIGNED_XML_CONTENT, "{}");
@@ -119,12 +119,12 @@ class SagaCommandHandlerTest {
     @DisplayName("Should send SUCCESS reply for already completed document (idempotency)")
     void testHandleProcessCommand_AlreadyCompleted() {
         // Given
-        ProcessTaxInvoicePdfCommand command = createProcessCommand();
+        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         when(repository.findByTaxInvoiceId("tax-inv-001"))
                 .thenReturn(Optional.of(createCompletedDocument()));
 
         // When
-        sagaCommandHandler.handleProcessCommand(command);
+        sagaCommandHandler.handle(command);
 
         // Then
         verify(pdfDocumentService, never()).generatePdf(anyString(), anyString(), anyString(), anyString());
@@ -137,7 +137,7 @@ class SagaCommandHandlerTest {
     @DisplayName("Should send FAILURE reply when max retries exceeded")
     void testHandleProcessCommand_MaxRetriesExceeded() {
         // Given
-        ProcessTaxInvoicePdfCommand command = createProcessCommand();
+        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         TaxInvoicePdfDocument failedDocument = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
                 .taxInvoiceId("tax-inv-001")
@@ -148,7 +148,7 @@ class SagaCommandHandlerTest {
         when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(failedDocument));
 
         // When
-        sagaCommandHandler.handleProcessCommand(command);
+        sagaCommandHandler.handle(command);
 
         // Then
         verify(pdfDocumentService, never()).generatePdf(anyString(), anyString(), anyString(), anyString());
@@ -160,7 +160,7 @@ class SagaCommandHandlerTest {
     @DisplayName("Should send FAILURE reply when PDF generation returns FAILED document")
     void testHandleProcessCommand_GenerationFails() {
         // Given
-        ProcessTaxInvoicePdfCommand command = createProcessCommand();
+        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
         when(restTemplate.getForObject(SIGNED_XML_URL, String.class)).thenReturn(SIGNED_XML_CONTENT);
 
@@ -176,7 +176,7 @@ class SagaCommandHandlerTest {
                 .thenReturn(failedDoc);
 
         // When
-        sagaCommandHandler.handleProcessCommand(command);
+        sagaCommandHandler.handle(command);
 
         // Then — FAILURE reply published with the error message from the document
         verify(eventPublisher, never()).publishPdfGenerated(any());
@@ -188,7 +188,7 @@ class SagaCommandHandlerTest {
     @DisplayName("Should carry forward retry count correctly from previous failed attempt")
     void testHandleProcessCommand_RetryCountCarriedForward() {
         // Given — previous failed attempt with retryCount=1
-        ProcessTaxInvoicePdfCommand command = createProcessCommand();
+        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         TaxInvoicePdfDocument previousFailed = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
                 .taxInvoiceId("tax-inv-001")
@@ -213,7 +213,7 @@ class SagaCommandHandlerTest {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // When
-        sagaCommandHandler.handleProcessCommand(command);
+        sagaCommandHandler.handle(command);
 
         // Then — document saved with retryCount = previousFailed.retryCount + 1 = 2
         ArgumentCaptor<TaxInvoicePdfDocument> captor = ArgumentCaptor.forClass(TaxInvoicePdfDocument.class);
@@ -226,12 +226,12 @@ class SagaCommandHandlerTest {
     @DisplayName("Should delete document and send COMPENSATED reply")
     void testHandleCompensation_Success() {
         // Given
-        CompensateTaxInvoicePdfCommand command = createCompensateCommand();
+        KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
         TaxInvoicePdfDocument document = createCompletedDocument();
         when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(document));
 
         // When
-        sagaCommandHandler.handleCompensation(command);
+        sagaCommandHandler.handle(command);
 
         // Then
         verify(pdfDocumentService).deletePdfFile(document.getDocumentPath());
@@ -243,11 +243,11 @@ class SagaCommandHandlerTest {
     @DisplayName("Should send COMPENSATED reply even when no document exists")
     void testHandleCompensation_NoDocumentFound() {
         // Given
-        CompensateTaxInvoicePdfCommand command = createCompensateCommand();
+        KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
         when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
 
         // When
-        sagaCommandHandler.handleCompensation(command);
+        sagaCommandHandler.handle(command);
 
         // Then
         verify(pdfDocumentService, never()).deletePdfFile(anyString());
@@ -259,14 +259,14 @@ class SagaCommandHandlerTest {
     @DisplayName("Should send FAILURE reply when compensation fails")
     void testHandleCompensation_Failure() {
         // Given
-        CompensateTaxInvoicePdfCommand command = createCompensateCommand();
+        KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
         TaxInvoicePdfDocument document = createCompletedDocument();
         when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(document));
         doThrow(new RuntimeException("Delete failed"))
                 .when(pdfDocumentService).deletePdfFile(anyString());
 
         // When
-        sagaCommandHandler.handleCompensation(command);
+        sagaCommandHandler.handle(command);
 
         // Then
         verify(sagaReplyPublisher).publishFailure(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF),

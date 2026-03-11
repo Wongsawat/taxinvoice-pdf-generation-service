@@ -1,6 +1,5 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.persistence.outbox;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.persistence.outbox;
 
-import com.wpanther.saga.domain.outbox.OutboxEvent;
 import com.wpanther.saga.domain.outbox.OutboxStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -87,7 +86,7 @@ public class OutboxEventEntity {
     /**
      * Convert domain OutboxEvent to JPA entity.
      */
-    public static OutboxEventEntity fromDomain(OutboxEvent event) {
+    public static OutboxEventEntity fromDomain(com.wpanther.saga.domain.outbox.OutboxEvent event) {
         return OutboxEventEntity.builder()
                 .id(event.getId())
                 .aggregateType(event.getAggregateType())
@@ -108,8 +107,8 @@ public class OutboxEventEntity {
     /**
      * Convert JPA entity to domain OutboxEvent.
      */
-    public OutboxEvent toDomain() {
-        return OutboxEvent.builder()
+    public com.wpanther.saga.domain.outbox.OutboxEvent toDomain() {
+        return com.wpanther.saga.domain.outbox.OutboxEvent.builder()
                 .id(this.id)
                 .aggregateType(this.aggregateType)
                 .aggregateId(this.aggregateId)

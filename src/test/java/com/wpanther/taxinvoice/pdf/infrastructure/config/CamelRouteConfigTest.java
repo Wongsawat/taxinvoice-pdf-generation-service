@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.pdf.application.service.SagaCommandHandler;
-import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
-import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
-import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
-import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfReplyEvent;
+import com.wpanther.taxinvoice.pdf.application.usecase.CompensateTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.application.usecase.ProcessTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.SagaRouteConfig;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfReplyEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,23 +27,29 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CamelRouteConfigTest {
 
     @Mock
+    private ProcessTaxInvoicePdfUseCase processUseCase;
+
+    @Mock
+    private CompensateTaxInvoicePdfUseCase compensateUseCase;
+
+    @Mock
     private SagaCommandHandler sagaCommandHandler;
 
     private ObjectMapper objectMapper;
-    private CamelRouteConfig camelRouteConfig;
+    private SagaRouteConfig sagaRouteConfig;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
-        camelRouteConfig = new CamelRouteConfig(sagaCommandHandler);
+        sagaRouteConfig = new SagaRouteConfig(processUseCase, compensateUseCase, sagaCommandHandler);
     }
 
     @Test
-    @DisplayName("Should serialize and deserialize ProcessTaxInvoicePdfCommand")
+    @DisplayName("Should serialize and deserialize KafkaTaxInvoiceProcessCommand")
     void testProcessTaxInvoicePdfCommandSerialization() throws Exception {
         // Given
-        ProcessTaxInvoicePdfCommand command = new ProcessTaxInvoicePdfCommand(
+        KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001", "TXINV-2024-001",
                 "<TaxInvoice>...</TaxInvoice>", "{}"
@@ -48,7 +57,7 @@ class CamelRouteConfigTest {
 
         // When
         String json = objectMapper.writeValueAsString(command);
-        ProcessTaxInvoicePdfCommand deserialized = objectMapper.readValue(json, ProcessTaxInvoicePdfCommand.class);
+        KafkaTaxInvoiceProcessCommand deserialized = objectMapper.readValue(json, KafkaTaxInvoiceProcessCommand.class);
 
         // Then
         assertThat(deserialized.getSagaId()).isEqualTo("saga-001");
@@ -63,17 +72,17 @@ class CamelRouteConfigTest {
     }
 
     @Test
-    @DisplayName("Should serialize and deserialize CompensateTaxInvoicePdfCommand")
+    @DisplayName("Should serialize and deserialize KafkaTaxInvoiceCompensateCommand")
     void testCompensateTaxInvoicePdfCommandSerialization() throws Exception {
         // Given
-        CompensateTaxInvoicePdfCommand command = new CompensateTaxInvoicePdfCommand(
+        KafkaTaxInvoiceCompensateCommand command = new KafkaTaxInvoiceCompensateCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "tax-inv-001"
         );
 
         // When
         String json = objectMapper.writeValueAsString(command);
-        CompensateTaxInvoicePdfCommand deserialized = objectMapper.readValue(json, CompensateTaxInvoicePdfCommand.class);
+        KafkaTaxInvoiceCompensateCommand deserialized = objectMapper.readValue(json, KafkaTaxInvoiceCompensateCommand.class);
 
         // Then
         assertThat(deserialized.getSagaId()).isEqualTo("saga-001");
@@ -131,7 +140,7 @@ class CamelRouteConfigTest {
     }
 
     @Test
-    @DisplayName("Should deserialize ProcessTaxInvoicePdfCommand from JSON")
+    @DisplayName("Should deserialize KafkaTaxInvoiceProcessCommand from JSON")
     void testProcessCommandDeserialization() throws Exception {
         // Given - sagaStep uses kebab-case code as serialized by SagaStep @JsonValue
         String json = """
@@ -152,7 +161,7 @@ class CamelRouteConfigTest {
             """;
 
         // When
-        ProcessTaxInvoicePdfCommand cmd = objectMapper.readValue(json, ProcessTaxInvoicePdfCommand.class);
+        KafkaTaxInvoiceProcessCommand cmd = objectMapper.readValue(json, KafkaTaxInvoiceProcessCommand.class);
 
         // Then
         assertThat(cmd.getEventId()).isEqualTo(UUID.fromString("550e8400-e29b-41d4-a716-446655440000"));

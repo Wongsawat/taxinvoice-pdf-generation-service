@@ -1,7 +1,7 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.config;
 
-import com.wpanther.taxinvoice.pdf.infrastructure.persistence.outbox.JpaOutboxEventRepository;
-import com.wpanther.taxinvoice.pdf.infrastructure.persistence.outbox.SpringDataOutboxRepository;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.persistence.outbox.JpaOutboxEventRepository;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.persistence.outbox.SpringDataOutboxRepository;
 import com.wpanther.saga.domain.outbox.OutboxEventRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;

@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.persistence;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.persistence;
 
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import jakarta.persistence.*;

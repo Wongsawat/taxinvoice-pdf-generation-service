@@ -28,6 +28,7 @@
         <camel.version>4.14.4</camel.version>
         <saga.commons.version>1.0.0-SNAPSHOT</saga.commons.version>
         <aws-sdk.version>2.20.26</aws-sdk.version>
+        <resilience4j.version>2.1.0</resilience4j.version>
     </properties>
 
     <dependencyManagement>
@@ -188,6 +189,13 @@
         <dependency>
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>s3</artifactId>
+        </dependency>
+
+        <!-- Resilience4j Circuit Breaker -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <version>${resilience4j.version}</version>
         </dependency>
 
         <!-- Micrometer for metrics -->

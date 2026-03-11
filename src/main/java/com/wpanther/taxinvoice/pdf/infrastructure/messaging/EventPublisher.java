@@ -1,6 +1,7 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
 import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,7 @@ import java.util.Map;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class EventPublisher {
+public class EventPublisher implements PdfEventPort {
 
     private static final String AGGREGATE_TYPE = OutboxConstants.AGGREGATE_TYPE;
 
@@ -27,6 +28,7 @@ public class EventPublisher {
     /**
      * Publish PDF generated event to pdf.generated.tax-invoice topic (for Notification Service).
      */
+    @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public void publishPdfGenerated(TaxInvoicePdfGeneratedEvent event) {
         Map<String, String> headers = Map.of(

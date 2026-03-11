@@ -47,6 +47,9 @@ app:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     consumer:
       group-id: taxinvoice-pdf-generation-service
+      break-on-first-error: ${KAFKA_BREAK_ON_FIRST_ERROR:true}
+      max-poll-records: ${KAFKA_MAX_POLL_RECORDS:100}
+      consumers-count: ${KAFKA_CONSUMERS_COUNT:3}
     topics:
       saga-command-tax-invoice-pdf: saga.command.tax-invoice-pdf
       saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf

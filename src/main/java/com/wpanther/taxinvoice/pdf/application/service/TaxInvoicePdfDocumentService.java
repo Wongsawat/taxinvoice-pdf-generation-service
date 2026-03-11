@@ -1,24 +1,26 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
+import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
+import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
+import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
-import java.time.LocalDate;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Application service for Tax Invoice PDF document operations.
- * Stores generated PDFs in MinIO (S3-compatible) storage.
+ * Application service for TaxInvoicePdfDocument lifecycle.
+ *
+ * Each method is a short, focused @Transactional unit — no CPU or network I/O inside any transaction.
+ * TX1: beginGeneration() / replaceAndBeginGeneration()
+ * TX2: completeGenerationAndPublish() / failGenerationAndPublish()
  */
 @Service
 @RequiredArgsConstructor
@@ -26,104 +28,147 @@ import java.util.UUID;
 public class TaxInvoicePdfDocumentService {
 
     private final TaxInvoicePdfDocumentRepository repository;
-    private final TaxInvoicePdfGenerationService pdfGenerationService;
-    private final S3Client s3Client;
+    private final PdfEventPort pdfEventPort;
+    private final SagaReplyPort sagaReplyPort;
 
-    @Value("${app.minio.bucket-name}")
-    private String bucketName;
+    @Transactional(readOnly = true)
+    public Optional<TaxInvoicePdfDocument> findByTaxInvoiceId(String taxInvoiceId) {
+        return repository.findByTaxInvoiceId(taxInvoiceId);
+    }
 
-    @Value("${app.minio.base-url}")
-    private String baseUrl;
-
-    /**
-     * Generate PDF document for tax invoice and upload to MinIO.
-     */
     @Transactional
-    public TaxInvoicePdfDocument generatePdf(
-        String taxInvoiceId,
-        String taxInvoiceNumber,
-        String xmlContent,
-        String taxInvoiceDataJson
-    ) {
-        log.info("Generating PDF for tax invoice: {}", taxInvoiceNumber);
-
-        TaxInvoicePdfDocument document = TaxInvoicePdfDocument.builder()
-            .taxInvoiceId(taxInvoiceId)
-            .taxInvoiceNumber(taxInvoiceNumber)
-            .build();
-
-        document = repository.save(document);
-
-        try {
-            document.startGeneration();
-            document = repository.save(document);
-
-            byte[] pdfBytes = pdfGenerationService.generatePdf(
-                taxInvoiceNumber, xmlContent, taxInvoiceDataJson);
-
-            String s3Key = uploadToMinIO(taxInvoiceNumber, pdfBytes);
-            String fileUrl = baseUrl + "/" + s3Key;
-
-            document.markCompleted(s3Key, fileUrl, pdfBytes.length);
-            document.markXmlEmbedded();
-            document = repository.save(document);
-
-            log.info("Successfully generated and uploaded PDF for tax invoice: {} (size: {} bytes, key: {})",
-                taxInvoiceNumber, pdfBytes.length, s3Key);
-
-            return document;
-
-        } catch (Exception e) {
-            log.error("Failed to generate PDF for tax invoice: {}", taxInvoiceNumber, e);
-            String reason = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
-            document.markFailed(reason);
-            // Return the FAILED document — do NOT re-throw.
-            // Re-throwing a RuntimeException here would mark the shared @Transactional(REQUIRED)
-            // transaction as rollback-only, preventing the caller from committing the FAILURE
-            // saga reply to the outbox in the same transaction.
-            return repository.save(document);
-        }
-    }
-
-    /**
-     * Upload PDF bytes to MinIO and return the S3 key.
-     */
-    private String uploadToMinIO(String taxInvoiceNumber, byte[] pdfBytes) {
-        LocalDate now = LocalDate.now();
-        String fileName = String.format("taxinvoice-%s-%s.pdf",
-            taxInvoiceNumber.replaceAll("[^a-zA-Z0-9\\-_]", "_"),
-            UUID.randomUUID());
-        String s3Key = String.format("%04d/%02d/%02d/%s",
-            now.getYear(), now.getMonthValue(), now.getDayOfMonth(), fileName);
-
-        PutObjectRequest putRequest = PutObjectRequest.builder()
-            .bucket(bucketName)
-            .key(s3Key)
-            .contentType("application/pdf")
-            .contentLength((long) pdfBytes.length)
-            .build();
-
-        s3Client.putObject(putRequest, RequestBody.fromBytes(pdfBytes));
-        log.debug("Uploaded PDF to MinIO: bucket={}, key={}", bucketName, s3Key);
-
-        return s3Key;
-    }
-
-    /**
-     * Delete a PDF from MinIO (used for compensation).
-     * The documentPath column stores the S3 key.
-     */
-    public void deletePdfFile(String s3Key) {
-        try {
-            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
-                .bucket(bucketName)
-                .key(s3Key)
+    public TaxInvoicePdfDocument beginGeneration(String taxInvoiceId, String taxInvoiceNumber) {
+        log.info("Initiating PDF generation for tax invoice: {}", taxInvoiceNumber);
+        TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
+                .taxInvoiceId(taxInvoiceId)
+                .taxInvoiceNumber(taxInvoiceNumber)
                 .build();
-            s3Client.deleteObject(deleteRequest);
-            log.info("Deleted PDF from MinIO: bucket={}, key={}", bucketName, s3Key);
-        } catch (Exception e) {
-            log.error("Failed to delete PDF from MinIO: key={}", s3Key, e);
-            throw new RuntimeException("Failed to delete PDF from MinIO", e);
+        doc.startGeneration();
+        return repository.save(doc);
+    }
+
+    @Transactional
+    public TaxInvoicePdfDocument replaceAndBeginGeneration(
+            UUID existingId, int previousRetryCount, String taxInvoiceId, String taxInvoiceNumber) {
+        log.info("Replacing document {} and re-starting generation for tax invoice: {}", existingId, taxInvoiceNumber);
+        repository.deleteById(existingId);
+        repository.flush();
+        TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
+                .taxInvoiceId(taxInvoiceId)
+                .taxInvoiceNumber(taxInvoiceNumber)
+                .build();
+        doc.startGeneration();
+        for (int i = 0; i < previousRetryCount + 1; i++) {
+            doc.incrementRetryCount();
         }
+        return repository.save(doc);
+    }
+
+    @Transactional
+    public void completeGenerationAndPublish(UUID documentId, String s3Key, String fileUrl,
+                                             long fileSize, int previousRetryCount,
+                                             KafkaTaxInvoiceProcessCommand command) {
+        TaxInvoicePdfDocument doc = requireDocument(documentId);
+        doc.markCompleted(s3Key, fileUrl, fileSize);
+        doc.markXmlEmbedded();
+        applyRetryCount(doc, previousRetryCount);
+        doc = repository.save(doc);
+
+        pdfEventPort.publishPdfGenerated(buildGeneratedEvent(doc, command));
+        sagaReplyPort.publishSuccess(
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                doc.getDocumentUrl(), doc.getFileSize());
+
+        log.info("Completed PDF generation for saga {} tax invoice {}",
+                command.getSagaId(), doc.getTaxInvoiceNumber());
+    }
+
+    @Transactional
+    public void failGenerationAndPublish(UUID documentId, String errorMessage,
+                                         int previousRetryCount,
+                                         KafkaTaxInvoiceProcessCommand command) {
+        String safeError = errorMessage != null ? errorMessage : "PDF generation failed";
+        TaxInvoicePdfDocument doc = requireDocument(documentId);
+        doc.markFailed(safeError);
+        applyRetryCount(doc, previousRetryCount);
+        repository.save(doc);
+
+        sagaReplyPort.publishFailure(
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), safeError);
+
+        log.warn("PDF generation failed for saga {} tax invoice {}: {}",
+                command.getSagaId(), doc.getTaxInvoiceNumber(), safeError);
+    }
+
+    @Transactional
+    public void deleteById(UUID documentId) {
+        repository.deleteById(documentId);
+        repository.flush();
+    }
+
+    @Transactional
+    public void publishIdempotentSuccess(TaxInvoicePdfDocument existing,
+                                         KafkaTaxInvoiceProcessCommand command) {
+        pdfEventPort.publishPdfGenerated(buildGeneratedEvent(existing, command));
+        sagaReplyPort.publishSuccess(
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                existing.getDocumentUrl(), existing.getFileSize());
+        log.warn("Tax invoice PDF already generated for saga {} — re-publishing SUCCESS reply",
+                command.getSagaId());
+    }
+
+    @Transactional
+    public void publishRetryExhausted(KafkaTaxInvoiceProcessCommand command) {
+        sagaReplyPort.publishFailure(
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
+                "Maximum retry attempts exceeded");
+        log.error("Max retries exceeded for saga {} tax invoice {}",
+                command.getSagaId(), command.getTaxInvoiceNumber());
+    }
+
+    @Transactional
+    public void publishGenerationFailure(KafkaTaxInvoiceProcessCommand command, String errorMessage) {
+        sagaReplyPort.publishFailure(
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), errorMessage);
+    }
+
+    @Transactional
+    public void publishCompensated(KafkaTaxInvoiceCompensateCommand command) {
+        sagaReplyPort.publishCompensated(
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId());
+    }
+
+    @Transactional
+    public void publishCompensationFailure(KafkaTaxInvoiceCompensateCommand command, String error) {
+        sagaReplyPort.publishFailure(
+                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
+    }
+
+    private TaxInvoicePdfDocument requireDocument(UUID documentId) {
+        return repository.findById(documentId)
+                .orElseThrow(() -> {
+                    log.error("TaxInvoicePdfDocument not found for id={}", documentId);
+                    return new IllegalStateException("Expected tax invoice PDF document is absent");
+                });
+    }
+
+    private void applyRetryCount(TaxInvoicePdfDocument doc, int previousRetryCount) {
+        if (previousRetryCount < 0) return;
+        int target = previousRetryCount + 1;
+        while (doc.getRetryCount() < target) {
+            doc.incrementRetryCount();
+        }
+    }
+
+    private TaxInvoicePdfGeneratedEvent buildGeneratedEvent(TaxInvoicePdfDocument doc,
+                                                             KafkaTaxInvoiceProcessCommand command) {
+        return new TaxInvoicePdfGeneratedEvent(
+                command.getDocumentId(),
+                doc.getTaxInvoiceId(),
+                doc.getTaxInvoiceNumber(),
+                doc.getDocumentUrl(),
+                doc.getFileSize(),
+                doc.isXmlEmbedded(),
+                command.getCorrelationId());
     }
 }

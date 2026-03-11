@@ -1,224 +1,223 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
-import com.wpanther.taxinvoice.pdf.domain.event.CompensateTaxInvoicePdfCommand;
-import com.wpanther.taxinvoice.pdf.domain.event.ProcessTaxInvoicePdfCommand;
-import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.application.port.out.PdfStoragePort;
+import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
+import com.wpanther.taxinvoice.pdf.application.port.out.SignedXmlFetchPort;
+import com.wpanther.taxinvoice.pdf.application.usecase.CompensateTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.application.usecase.ProcessTaxInvoicePdfUseCase;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
-import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.infrastructure.messaging.EventPublisher;
-import com.wpanther.taxinvoice.pdf.infrastructure.messaging.SagaReplyPublisher;
-import lombok.RequiredArgsConstructor;
+import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 
 /**
- * Handles saga commands from orchestrator for tax invoice PDF generation.
- * Delegates business logic to TaxInvoicePdfDocumentService and sends replies.
+ * Orchestrates tax invoice PDF generation in response to saga commands.
+ * No @Transactional here — all DB work is in short focused transactions via TaxInvoicePdfDocumentService.
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class SagaCommandHandler {
+public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, CompensateTaxInvoicePdfUseCase {
 
-    private final TaxInvoicePdfDocumentRepository repository;
+    private static final String MDC_SAGA_ID        = "sagaId";
+    private static final String MDC_CORRELATION_ID = "correlationId";
+    private static final String MDC_TAX_INVOICE_NUM = "taxInvoiceNumber";
+    private static final String MDC_TAX_INVOICE_ID  = "taxInvoiceId";
+
     private final TaxInvoicePdfDocumentService pdfDocumentService;
-    private final SagaReplyPublisher sagaReplyPublisher;
-    private final EventPublisher eventPublisher;
-    private final RestTemplate restTemplate;
+    private final TaxInvoicePdfGenerationService pdfGenerationService;
+    private final PdfStoragePort pdfStoragePort;
+    private final SagaReplyPort sagaReplyPort;
+    private final SignedXmlFetchPort signedXmlFetchPort;
+    private final int maxRetries;
 
-    @Value("${app.pdf.generation.max-retries:3}")
-    private int maxRetries;
+    public SagaCommandHandler(TaxInvoicePdfDocumentService pdfDocumentService,
+                              TaxInvoicePdfGenerationService pdfGenerationService,
+                              PdfStoragePort pdfStoragePort,
+                              SagaReplyPort sagaReplyPort,
+                              SignedXmlFetchPort signedXmlFetchPort,
+                              @Value("${app.pdf.generation.max-retries:3}") int maxRetries) {
+        this.pdfDocumentService = pdfDocumentService;
+        this.pdfGenerationService = pdfGenerationService;
+        this.pdfStoragePort = pdfStoragePort;
+        this.sagaReplyPort = sagaReplyPort;
+        this.signedXmlFetchPort = signedXmlFetchPort;
+        this.maxRetries = maxRetries;
+    }
 
-    /**
-     * Handle a ProcessTaxInvoicePdfCommand from saga orchestrator.
-     * Generates PDF and sends a SUCCESS or FAILURE reply.
-     */
-    @Transactional
-    public void handleProcessCommand(ProcessTaxInvoicePdfCommand command) {
-        MDC.put("sagaId", command.getSagaId());
-        MDC.put("correlationId", command.getCorrelationId());
-        MDC.put("taxInvoiceNumber", command.getTaxInvoiceNumber());
+    @Override
+    public void handle(KafkaTaxInvoiceProcessCommand command) {
+        MDC.put(MDC_SAGA_ID,         command.getSagaId());
+        MDC.put(MDC_CORRELATION_ID,  command.getCorrelationId());
+        MDC.put(MDC_TAX_INVOICE_NUM, command.getTaxInvoiceNumber());
+        MDC.put(MDC_TAX_INVOICE_ID,  command.getTaxInvoiceId());
         try {
-            log.info("Handling ProcessTaxInvoicePdfCommand for saga {} taxInvoice {}",
+            log.info("Handling ProcessCommand for saga {} taxInvoice {}",
                     command.getSagaId(), command.getTaxInvoiceNumber());
-
             try {
-                Optional<TaxInvoicePdfDocument> existing =
-                        repository.findByTaxInvoiceId(command.getTaxInvoiceId());
+                String signedXmlUrl  = command.getSignedXmlUrl();
+                String taxInvoiceId  = command.getTaxInvoiceId();
+                String taxInvoiceNum = command.getTaxInvoiceNumber();
 
-                // Idempotency: already completed — re-publish events and reply SUCCESS
-                if (existing.isPresent() && existing.get().isCompleted()) {
-                    log.warn("Tax invoice PDF already generated for {}, sending SUCCESS reply",
-                            command.getTaxInvoiceNumber());
-                    TaxInvoicePdfDocument document = existing.get();
-                    publishEvents(document, command);
-                    sagaReplyPublisher.publishSuccess(
-                            command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                            document.getDocumentUrl(), document.getFileSize());
+                if (signedXmlUrl == null || signedXmlUrl.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(command, "signedXmlUrl is null or blank");
+                    return;
+                }
+                if (taxInvoiceId == null || taxInvoiceId.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(command, "taxInvoiceId is null or blank");
+                    return;
+                }
+                if (taxInvoiceNum == null || taxInvoiceNum.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(command, "taxInvoiceNumber is null or blank");
                     return;
                 }
 
-                // Retry limit check: use aggregate method
-                if (existing.isPresent() && existing.get().isFailed()) {
-                    TaxInvoicePdfDocument failedDocument = existing.get();
-                    if (failedDocument.isMaxRetriesExceeded(maxRetries)) {
-                        log.error("Max retries ({}) exceeded for saga {} taxInvoice {}",
-                                maxRetries, command.getSagaId(), command.getTaxInvoiceNumber());
-                        sagaReplyPublisher.publishFailure(
-                                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                                "Maximum retry attempts exceeded");
+                Optional<TaxInvoicePdfDocument> existing =
+                        pdfDocumentService.findByTaxInvoiceId(taxInvoiceId);
+
+                if (existing.isPresent() && existing.get().isCompleted()) {
+                    pdfDocumentService.publishIdempotentSuccess(existing.get(), command);
+                    return;
+                }
+
+                int previousRetryCount = existing.map(TaxInvoicePdfDocument::getRetryCount).orElse(-1);
+
+                if (existing.isPresent()) {
+                    if (existing.get().isMaxRetriesExceeded(maxRetries)) {
+                        pdfDocumentService.publishRetryExhausted(command);
                         return;
                     }
-                    // Delete the failed record so generatePdf() can create a fresh one;
-                    // flush ensures the DELETE precedes the subsequent INSERT on the same taxInvoiceId.
-                    repository.deleteById(failedDocument.getId());
-                    repository.flush();
                 }
 
-                // Validate and download signed XML from MinIO
-                String signedXmlUrl = command.getSignedXmlUrl();
-                if (signedXmlUrl == null || signedXmlUrl.isBlank()) {
-                    throw new IllegalStateException("signedXmlUrl is null or blank in saga command");
-                }
-                String signedXml = restTemplate.getForObject(signedXmlUrl, String.class);
-                if (signedXml == null || signedXml.isBlank()) {
-                    throw new IllegalStateException("Failed to download signed XML from " + signedXmlUrl);
-                }
-
-                // Generate PDF — never throws; returns document in COMPLETED or FAILED state
-                TaxInvoicePdfDocument document = pdfDocumentService.generatePdf(
-                        command.getTaxInvoiceId(),
-                        command.getTaxInvoiceNumber(),
-                        signedXml,
-                        command.getTaxInvoiceDataJson());
-
-                // If generation failed, persist the correct retry count and send FAILURE reply
-                if (document.isFailed()) {
-                    carryForwardRetryCount(document, existing);
-                    sagaReplyPublisher.publishFailure(
-                            command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                            document.getErrorMessage() != null
-                                    ? document.getErrorMessage()
-                                    : "PDF generation failed");
-                    return;
-                }
-
-                // Carry forward the retry count from the previous failed attempt.
-                // The new document starts at retryCount=0; set it to previousCount+1
-                // so isMaxRetriesExceeded() fires correctly on the next saga retry.
+                // TX1: create GENERATING record
+                TaxInvoicePdfDocument document;
                 if (existing.isPresent()) {
-                    carryForwardRetryCount(document, existing);
-                    document = repository.save(document);
+                    document = pdfDocumentService.replaceAndBeginGeneration(
+                            existing.get().getId(), previousRetryCount, taxInvoiceId, taxInvoiceNum);
+                } else {
+                    document = pdfDocumentService.beginGeneration(taxInvoiceId, taxInvoiceNum);
                 }
 
-                // Publish events and send SUCCESS reply with MinIO URL for the PDF_STORAGE step
-                publishEvents(document, command);
-                sagaReplyPublisher.publishSuccess(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        document.getDocumentUrl(), document.getFileSize());
+                String s3Key = null;
+                try {
+                    // NO TRANSACTION: download, generate, upload
+                    String signedXml = signedXmlFetchPort.fetch(signedXmlUrl);
+                    byte[] pdfBytes  = pdfGenerationService.generatePdf(
+                            taxInvoiceNum, signedXml, command.getTaxInvoiceDataJson());
+                    s3Key = pdfStoragePort.store(taxInvoiceNum, pdfBytes);
+                    String fileUrl   = pdfStoragePort.resolveUrl(s3Key);
 
-                log.info("Successfully processed tax invoice PDF generation for saga {} taxInvoice {}",
-                        command.getSagaId(), command.getTaxInvoiceNumber());
+                    // TX2: mark COMPLETED + write outbox
+                    pdfDocumentService.completeGenerationAndPublish(
+                            document.getId(), s3Key, fileUrl, pdfBytes.length, previousRetryCount, command);
 
+                } catch (CallNotPermittedException e) {
+                    log.warn("MinIO CB OPEN for saga {} taxInvoice {}: {}",
+                            command.getSagaId(), taxInvoiceNum, e.getMessage());
+                    pdfDocumentService.failGenerationAndPublish(
+                            document.getId(), "MinIO circuit breaker open: " + e.getMessage(),
+                            previousRetryCount, command);
+
+                } catch (Exception e) {
+                    if (s3Key != null) {
+                        try { pdfStoragePort.delete(s3Key); }
+                        catch (Exception del) {
+                            log.error("[ORPHAN_PDF] s3Key={} saga={} error={}", s3Key, command.getSagaId(),
+                                    describeThrowable(del));
+                        }
+                    }
+                    log.error("PDF generation/upload failed for saga {} taxInvoice {}: {}",
+                            command.getSagaId(), taxInvoiceNum, e.getMessage(), e);
+                    pdfDocumentService.failGenerationAndPublish(
+                            document.getId(), describeThrowable(e), previousRetryCount, command);
+                }
+
+            } catch (OptimisticLockingFailureException e) {
+                log.warn("Concurrent modification for saga {}: {}", command.getSagaId(), e.getMessage());
+                pdfDocumentService.publishGenerationFailure(command, "Concurrent modification: " + e.getMessage());
             } catch (Exception e) {
-                log.error("Failed to process tax invoice PDF generation for saga {} taxInvoice {}: {}",
-                        command.getSagaId(), command.getTaxInvoiceNumber(), e.getMessage(), e);
-                sagaReplyPublisher.publishFailure(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        describeException(e));
+                log.error("Unexpected error for saga {}: {}", command.getSagaId(), e.getMessage(), e);
+                pdfDocumentService.publishGenerationFailure(command, describeThrowable(e));
             }
         } finally {
             MDC.clear();
         }
     }
 
-    /**
-     * Handle a CompensateTaxInvoicePdfCommand from saga orchestrator.
-     * Deletes generated PDF document and sends a COMPENSATED reply.
-     */
-    @Transactional
-    public void handleCompensation(CompensateTaxInvoicePdfCommand command) {
-        MDC.put("sagaId", command.getSagaId());
-        MDC.put("correlationId", command.getCorrelationId());
-        MDC.put("taxInvoiceId", command.getTaxInvoiceId());
+    @Override
+    public void handle(KafkaTaxInvoiceCompensateCommand command) {
+        MDC.put(MDC_SAGA_ID,        command.getSagaId());
+        MDC.put(MDC_CORRELATION_ID,  command.getCorrelationId());
+        MDC.put(MDC_TAX_INVOICE_ID,  command.getTaxInvoiceId());
         try {
             log.info("Handling compensation for saga {} taxInvoice {}",
                     command.getSagaId(), command.getTaxInvoiceId());
-
             try {
                 Optional<TaxInvoicePdfDocument> existing =
-                        repository.findByTaxInvoiceId(command.getTaxInvoiceId());
+                        pdfDocumentService.findByTaxInvoiceId(command.getTaxInvoiceId());
 
                 if (existing.isPresent()) {
-                    TaxInvoicePdfDocument document = existing.get();
-                    // DB delete first: if this fails the transaction rolls back and the S3 object
-                    // remains intact — no orphaned DB record pointing to a missing file.
-                    // If DB delete succeeds but S3 delete fails below, we have an unreferenced S3
-                    // object. That is the lesser evil: it causes no functional harm and can be
-                    // cleaned up by a MinIO lifecycle expiry rule.
-                    repository.deleteById(document.getId());
-                    if (document.getDocumentPath() != null) {
-                        pdfDocumentService.deletePdfFile(document.getDocumentPath());
+                    TaxInvoicePdfDocument doc = existing.get();
+                    pdfDocumentService.deleteById(doc.getId());
+                    if (doc.getDocumentPath() != null) {
+                        try { pdfStoragePort.delete(doc.getDocumentPath()); }
+                        catch (Exception e) {
+                            log.warn("Failed to delete PDF from MinIO for saga {} key {}: {}",
+                                    command.getSagaId(), doc.getDocumentPath(), e.getMessage());
+                        }
                     }
-                    log.info("Compensated TaxInvoicePdfDocument {} for saga {}", document.getId(), command.getSagaId());
+                    log.info("Compensated TaxInvoicePdfDocument {} for saga {}",
+                            doc.getId(), command.getSagaId());
                 } else {
-                    log.info("No TaxInvoicePdfDocument found for taxInvoiceId {} - already compensated or never processed",
+                    log.info("No document for taxInvoiceId {} — already compensated",
                             command.getTaxInvoiceId());
                 }
-
-                sagaReplyPublisher.publishCompensated(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId());
+                pdfDocumentService.publishCompensated(command);
 
             } catch (Exception e) {
-                log.error("Failed to compensate tax invoice PDF generation for saga {} taxInvoice {}: {}",
-                        command.getSagaId(), command.getTaxInvoiceId(), e.getMessage(), e);
-                sagaReplyPublisher.publishFailure(
-                        command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                        "Compensation failed: " + describeException(e));
+                log.error("Failed to compensate for saga {}: {}", command.getSagaId(), e.getMessage(), e);
+                pdfDocumentService.publishCompensationFailure(
+                        command, "Compensation failed: " + describeThrowable(e));
             }
         } finally {
             MDC.clear();
         }
     }
 
-    /**
-     * Carry forward the retry count from the previous (deleted) failed document to the
-     * replacement document. The replacement always starts at retryCount=0; incrementing
-     * to previousCount+1 ensures isMaxRetriesExceeded() fires on the correct attempt.
-     */
-    private void carryForwardRetryCount(TaxInvoicePdfDocument document,
-                                        Optional<TaxInvoicePdfDocument> previous) {
-        if (previous.isEmpty()) {
-            return;
-        }
-        int targetCount = previous.get().getRetryCount() + 1;
-        while (document.getRetryCount() < targetCount) {
-            document.incrementRetryCount();
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void publishOrchestrationFailure(KafkaTaxInvoiceProcessCommand command, Throwable cause) {
+        try {
+            sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
+                    command.getCorrelationId(),
+                    "Message routed to DLQ after retry exhaustion: " + describeThrowable(cause));
+        } catch (Exception e) {
+            log.error("Cannot notify orchestrator of DLQ failure for saga {}", command.getSagaId(), e);
         }
     }
 
-    /** Returns a non-null, human-readable description of an exception for saga reply messages. */
-    private String describeException(Exception e) {
-        String message = e.getMessage();
-        return e.getClass().getSimpleName() + (message != null ? ": " + message : "");
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void publishCompensationOrchestrationFailure(KafkaTaxInvoiceCompensateCommand command, Throwable cause) {
+        try {
+            sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
+                    command.getCorrelationId(),
+                    "Compensation DLQ after retry exhaustion: " + describeThrowable(cause));
+        } catch (Exception e) {
+            log.error("Cannot notify orchestrator of compensation DLQ failure for saga {}", command.getSagaId(), e);
+        }
     }
 
-    private void publishEvents(TaxInvoicePdfDocument document, ProcessTaxInvoicePdfCommand command) {
-        TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
-                command.getDocumentId(),
-                document.getTaxInvoiceId(),
-                document.getTaxInvoiceNumber(),
-                document.getDocumentUrl(),
-                document.getFileSize(),
-                document.isXmlEmbedded(),
-                command.getCorrelationId()
-        );
-        eventPublisher.publishPdfGenerated(event);
+    private String describeThrowable(Throwable t) {
+        if (t == null) return "unknown error";
+        String msg = t.getMessage();
+        return t.getClass().getSimpleName() + (msg != null ? ": " + msg : "");
     }
 }

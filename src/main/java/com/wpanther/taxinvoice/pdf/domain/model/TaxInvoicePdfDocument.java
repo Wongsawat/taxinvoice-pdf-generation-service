@@ -1,5 +1,6 @@
 package com.wpanther.taxinvoice.pdf.domain.model;
 
+import com.wpanther.taxinvoice.pdf.domain.exception.TaxInvoicePdfGenerationException;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -62,11 +63,11 @@ public class TaxInvoicePdfDocument {
      */
     private void validateInvariant() {
         if (taxInvoiceId.isBlank()) {
-            throw new IllegalStateException("Tax Invoice ID cannot be blank");
+            throw new TaxInvoicePdfGenerationException("Tax Invoice ID cannot be blank");
         }
 
         if (taxInvoiceNumber.isBlank()) {
-            throw new IllegalStateException("Tax Invoice number cannot be blank");
+            throw new TaxInvoicePdfGenerationException("Tax Invoice number cannot be blank");
         }
     }
 
@@ -75,7 +76,7 @@ public class TaxInvoicePdfDocument {
      */
     public void startGeneration() {
         if (this.status != GenerationStatus.PENDING) {
-            throw new IllegalStateException("Can only start generation from PENDING status");
+            throw new TaxInvoicePdfGenerationException("Can only start generation from PENDING status");
         }
         this.status = GenerationStatus.GENERATING;
     }
@@ -85,7 +86,7 @@ public class TaxInvoicePdfDocument {
      */
     public void markCompleted(String documentPath, String documentUrl, long fileSize) {
         if (this.status != GenerationStatus.GENERATING) {
-            throw new IllegalStateException("Can only complete from GENERATING status");
+            throw new TaxInvoicePdfGenerationException("Can only complete from GENERATING status");
         }
 
         Objects.requireNonNull(documentPath, "Document path is required");

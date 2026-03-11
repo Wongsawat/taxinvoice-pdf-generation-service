@@ -1,5 +1,6 @@
 package com.wpanther.taxinvoice.pdf.domain.model;
 
+import com.wpanther.taxinvoice.pdf.domain.exception.TaxInvoicePdfGenerationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -40,7 +41,7 @@ class TaxInvoicePdfDocumentTest {
                         .taxInvoiceId("   ")
                         .taxInvoiceNumber("TXINV-001")
                         .build()
-        ).isInstanceOf(IllegalStateException.class)
+        ).isInstanceOf(TaxInvoicePdfGenerationException.class)
          .hasMessageContaining("Tax Invoice ID cannot be blank");
     }
 
@@ -116,7 +117,7 @@ class TaxInvoicePdfDocumentTest {
         doc.startGeneration();
 
         assertThatThrownBy(doc::startGeneration)
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(TaxInvoicePdfGenerationException.class)
                 .hasMessageContaining("PENDING");
     }
 
@@ -126,7 +127,7 @@ class TaxInvoicePdfDocumentTest {
         TaxInvoicePdfDocument doc = pendingDocument();
 
         assertThatThrownBy(() -> doc.markCompleted("path", "url", 100L))
-                .isInstanceOf(IllegalStateException.class)
+                .isInstanceOf(TaxInvoicePdfGenerationException.class)
                 .hasMessageContaining("GENERATING");
     }
 

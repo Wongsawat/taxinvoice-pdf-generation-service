@@ -2,7 +2,7 @@ package com.wpanther.taxinvoice.pdf.application.service;
 
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
 import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
-import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;

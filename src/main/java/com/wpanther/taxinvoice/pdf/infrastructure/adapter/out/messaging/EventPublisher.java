@@ -1,8 +1,8 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.messaging;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
-import com.wpanther.taxinvoice.pdf.domain.event.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

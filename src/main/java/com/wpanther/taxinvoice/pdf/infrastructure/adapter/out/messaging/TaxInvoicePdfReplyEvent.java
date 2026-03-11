@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.domain.event;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging;
 
 import com.wpanther.saga.domain.enums.ReplyStatus;
 import com.wpanther.saga.domain.enums.SagaStep;

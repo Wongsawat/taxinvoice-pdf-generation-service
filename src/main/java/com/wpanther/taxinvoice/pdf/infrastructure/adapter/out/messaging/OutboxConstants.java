@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.messaging;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging;
 
 /**
  * Shared constants for outbox event publishing.

@@ -1,8 +1,9 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.pdf;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.pdf;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
+import com.wpanther.taxinvoice.pdf.domain.exception.TaxInvoicePdfGenerationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

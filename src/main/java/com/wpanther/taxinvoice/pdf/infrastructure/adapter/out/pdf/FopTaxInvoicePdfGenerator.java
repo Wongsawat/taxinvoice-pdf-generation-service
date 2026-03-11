@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.pdf;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.pdf;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fop.apps.Fop;

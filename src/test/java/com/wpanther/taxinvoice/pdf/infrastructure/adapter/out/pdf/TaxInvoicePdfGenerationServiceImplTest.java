@@ -1,7 +1,7 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.pdf;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.pdf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException;
+import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -89,7 +89,7 @@ class TaxInvoicePdfGenerationServiceImplTest {
         // Invalid JSON must fail fast — no silent degradation to a blank PDF
         assertThatThrownBy(() ->
                 service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, "not-valid-json"))
-                .isInstanceOf(TaxInvoicePdfGenerationException.class);
+                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class);
 
         verifyNoInteractions(fopPdfGenerator);
         verifyNoInteractions(pdfA3Converter);
@@ -122,7 +122,7 @@ class TaxInvoicePdfGenerationServiceImplTest {
 
         assertThatThrownBy(() ->
                 service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, MINIMAL_JSON))
-                .isInstanceOf(TaxInvoicePdfGenerationException.class)
+                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
                 .hasMessageContaining("PDF generation failed");
 
         verifyNoInteractions(pdfA3Converter);
@@ -137,7 +137,7 @@ class TaxInvoicePdfGenerationServiceImplTest {
 
         assertThatThrownBy(() ->
                 service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, MINIMAL_JSON))
-                .isInstanceOf(TaxInvoicePdfGenerationException.class)
+                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
                 .hasMessageContaining("PDF/A-3 conversion failed");
     }
 

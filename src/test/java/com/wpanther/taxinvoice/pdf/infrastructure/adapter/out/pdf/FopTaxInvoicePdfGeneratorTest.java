@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.pdf;
+package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.pdf;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

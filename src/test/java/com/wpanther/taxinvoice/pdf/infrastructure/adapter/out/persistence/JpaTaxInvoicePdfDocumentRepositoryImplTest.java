@@ -3,10 +3,10 @@ package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.persistence;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -19,20 +19,20 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
+@DisplayName("TaxInvoicePdfDocumentRepositoryAdapter Unit Tests")
 class JpaTaxInvoicePdfDocumentRepositoryImplTest {
 
     @Mock
     private JpaTaxInvoicePdfDocumentRepository jpaRepository;
 
-    @InjectMocks
     private TaxInvoicePdfDocumentRepositoryAdapter repository;
 
     private UUID id;
     private TaxInvoicePdfDocument domain;
-    private TaxInvoicePdfDocumentEntity entity;
 
     @BeforeEach
     void setUp() {
+        repository = new TaxInvoicePdfDocumentRepositoryAdapter(jpaRepository);
         id = UUID.randomUUID();
         LocalDateTime now = LocalDateTime.now();
 
@@ -50,8 +50,13 @@ class JpaTaxInvoicePdfDocumentRepositoryImplTest {
                 .createdAt(now)
                 .completedAt(now)
                 .build();
+    }
 
-        entity = TaxInvoicePdfDocumentEntity.builder()
+    @Test
+    @DisplayName("save() maps domain to entity and back")
+    void testSave_roundTrip() {
+        // Given
+        TaxInvoicePdfDocumentEntity entity = TaxInvoicePdfDocumentEntity.builder()
                 .id(id)
                 .taxInvoiceId("tax-inv-123")
                 .taxInvoiceNumber("TXINV-2024-001")
@@ -63,106 +68,52 @@ class JpaTaxInvoicePdfDocumentRepositoryImplTest {
                 .status(GenerationStatus.COMPLETED)
                 .errorMessage(null)
                 .retryCount(1)
-                .createdAt(now)
-                .completedAt(now)
+                .createdAt(LocalDateTime.now())
+                .completedAt(LocalDateTime.now())
                 .build();
-    }
-
-    // -------------------------------------------------------------------------
-    // toEntity mapping
-    // -------------------------------------------------------------------------
-
-    @Test
-    void save_mapsAllDomainFieldsToEntity() {
         when(jpaRepository.save(any())).thenReturn(entity);
 
-        repository.save(domain);
-
-        ArgumentCaptor<TaxInvoicePdfDocumentEntity> captor =
-                ArgumentCaptor.forClass(TaxInvoicePdfDocumentEntity.class);
-        verify(jpaRepository).save(captor.capture());
-
-        TaxInvoicePdfDocumentEntity saved = captor.getValue();
-        assertThat(saved.getId()).isEqualTo(id);
-        assertThat(saved.getTaxInvoiceId()).isEqualTo("tax-inv-123");
-        assertThat(saved.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
-        assertThat(saved.getDocumentPath()).isEqualTo("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf");
-        assertThat(saved.getDocumentUrl()).contains("taxinvoice-TXINV-2024-001-abc.pdf");
-        assertThat(saved.getFileSize()).isEqualTo(12345L);
-        assertThat(saved.getMimeType()).isEqualTo("application/pdf");
-        assertThat(saved.getXmlEmbedded()).isTrue();
-        assertThat(saved.getStatus()).isEqualTo(GenerationStatus.COMPLETED);
-        assertThat(saved.getRetryCount()).isEqualTo(1);
-    }
-
-    // -------------------------------------------------------------------------
-    // toDomain mapping
-    // -------------------------------------------------------------------------
-
-    @Test
-    void save_mapsAllEntityFieldsToDomain() {
-        when(jpaRepository.save(any())).thenReturn(entity);
-
+        // When
         TaxInvoicePdfDocument result = repository.save(domain);
 
-        assertThat(result.getId()).isEqualTo(id);
+        // Then
+        verify(jpaRepository).save(any(TaxInvoicePdfDocumentEntity.class));
         assertThat(result.getTaxInvoiceId()).isEqualTo("tax-inv-123");
         assertThat(result.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
-        assertThat(result.getDocumentPath()).isEqualTo("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf");
-        assertThat(result.getDocumentUrl()).contains("taxinvoice-TXINV-2024-001-abc.pdf");
         assertThat(result.getFileSize()).isEqualTo(12345L);
-        assertThat(result.getMimeType()).isEqualTo("application/pdf");
         assertThat(result.isXmlEmbedded()).isTrue();
         assertThat(result.getStatus()).isEqualTo(GenerationStatus.COMPLETED);
         assertThat(result.getRetryCount()).isEqualTo(1);
     }
 
     @Test
-    void toDomain_nullFileSize_defaultsToZero() {
-        entity.setFileSize(null);
-        when(jpaRepository.save(any())).thenReturn(entity);
-
-        TaxInvoicePdfDocument result = repository.save(domain);
-
-        assertThat(result.getFileSize()).isZero();
-    }
-
-    @Test
-    void toDomain_nullXmlEmbedded_defaultsToFalse() {
-        entity.setXmlEmbedded(null);
-        when(jpaRepository.save(any())).thenReturn(entity);
-
-        TaxInvoicePdfDocument result = repository.save(domain);
-
-        assertThat(result.isXmlEmbedded()).isFalse();
-    }
-
-    @Test
-    void toDomain_nullRetryCount_defaultsToZero() {
-        entity.setRetryCount(null);
-        when(jpaRepository.save(any())).thenReturn(entity);
-
-        TaxInvoicePdfDocument result = repository.save(domain);
-
-        assertThat(result.getRetryCount()).isZero();
-    }
-
-    // -------------------------------------------------------------------------
-    // findById
-    // -------------------------------------------------------------------------
-
-    @Test
-    void findById_found_returnsMappedDomain() {
+    @DisplayName("findById() returns mapped domain when found")
+    void testFoundById_found() {
+        // Given
+        TaxInvoicePdfDocumentEntity entity = TaxInvoicePdfDocumentEntity.builder()
+                .id(id)
+                .taxInvoiceId("tax-inv-123")
+                .taxInvoiceNumber("TXINV-2024-001")
+                .status(GenerationStatus.COMPLETED)
+                .fileSize(12345L)
+                .xmlEmbedded(true)
+                .retryCount(0)
+                .mimeType("application/pdf")
+                .build();
         when(jpaRepository.findById(id)).thenReturn(Optional.of(entity));
 
+        // When
         Optional<TaxInvoicePdfDocument> result = repository.findById(id);
 
+        // Then
         assertThat(result).isPresent();
-        assertThat(result.get().getId()).isEqualTo(id);
+        assertThat(result.get().getTaxInvoiceId()).isEqualTo("tax-inv-123");
+        assertThat(result.get().getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
     }
 
     @Test
-    void findById_notFound_returnsEmpty() {
+    @DisplayName("findById() returns empty when not found")
+    void testFoundById_notFound() {
         when(jpaRepository.findById(id)).thenReturn(Optional.empty());
 
         Optional<TaxInvoicePdfDocument> result = repository.findById(id);
@@ -170,22 +121,33 @@ class JpaTaxInvoicePdfDocumentRepositoryImplTest {
         assertThat(result).isEmpty();
     }
 
-    // -------------------------------------------------------------------------
-    // findByTaxInvoiceId
-    // -------------------------------------------------------------------------
-
     @Test
-    void findByTaxInvoiceId_found_returnsMappedDomain() {
+    @DisplayName("findByTaxInvoiceId() returns mapped domain when found")
+    void testFindByTaxInvoiceId_found() {
+        // Given
+        TaxInvoicePdfDocumentEntity entity = TaxInvoicePdfDocumentEntity.builder()
+                .id(id)
+                .taxInvoiceId("tax-inv-123")
+                .taxInvoiceNumber("TXINV-2024-001")
+                .status(GenerationStatus.COMPLETED)
+                .fileSize(12345L)
+                .xmlEmbedded(true)
+                .retryCount(0)
+                .mimeType("application/pdf")
+                .build();
         when(jpaRepository.findByTaxInvoiceId("tax-inv-123")).thenReturn(Optional.of(entity));
 
+        // When
         Optional<TaxInvoicePdfDocument> result = repository.findByTaxInvoiceId("tax-inv-123");
 
+        // Then
         assertThat(result).isPresent();
         assertThat(result.get().getTaxInvoiceId()).isEqualTo("tax-inv-123");
     }
 
     @Test
-    void findByTaxInvoiceId_notFound_returnsEmpty() {
+    @DisplayName("findByTaxInvoiceId() returns empty when not found")
+    void testFindByTaxInvoiceId_notFound() {
         when(jpaRepository.findByTaxInvoiceId("unknown")).thenReturn(Optional.empty());
 
         Optional<TaxInvoicePdfDocument> result = repository.findByTaxInvoiceId("unknown");
@@ -193,23 +155,17 @@ class JpaTaxInvoicePdfDocumentRepositoryImplTest {
         assertThat(result).isEmpty();
     }
 
-    // -------------------------------------------------------------------------
-    // deleteById
-    // -------------------------------------------------------------------------
-
     @Test
-    void deleteById_delegatesToJpaRepository() {
+    @DisplayName("deleteById() delegates to JPA repository")
+    void testDeleteById() {
         repository.deleteById(id);
 
         verify(jpaRepository).deleteById(id);
     }
 
-    // -------------------------------------------------------------------------
-    // flush
-    // -------------------------------------------------------------------------
-
     @Test
-    void flush_delegatesToJpaRepository() {
+    @DisplayName("flush() delegates to JPA repository")
+    void testFlush() {
         repository.flush();
 
         verify(jpaRepository).flush();

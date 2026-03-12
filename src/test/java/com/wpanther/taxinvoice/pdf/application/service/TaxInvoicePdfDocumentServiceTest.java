@@ -1,27 +1,26 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
+import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
+import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
-import org.junit.jupiter.api.BeforeEach;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
-import software.amazon.awssdk.core.sync.RequestBody;
-import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.DeleteObjectResponse;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
-import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -32,117 +31,273 @@ class TaxInvoicePdfDocumentServiceTest {
     private TaxInvoicePdfDocumentRepository repository;
 
     @Mock
-    private TaxInvoicePdfGenerationService pdfGenerationService;
+    private PdfEventPort pdfEventPort;
 
     @Mock
-    private S3Client s3Client;
+    private SagaReplyPort sagaReplyPort;
 
-    @InjectMocks
-    private TaxInvoicePdfDocumentService service;
-
-    private static final String BUCKET = "taxinvoices";
-    private static final String BASE_URL = "http://localhost:9000/taxinvoices";
-
-    @BeforeEach
-    void setUp() {
-        ReflectionTestUtils.setField(service, "bucketName", BUCKET);
-        ReflectionTestUtils.setField(service, "baseUrl", BASE_URL);
+    // Note: Using reflection to instantiate because Lombok @RequiredArgsConstructor
+    // is scope=provided, not available during test compilation
+    private TaxInvoicePdfDocumentService getService() {
+        try {
+            return TaxInvoicePdfDocumentService.class
+                    .getDeclaredConstructor(TaxInvoicePdfDocumentRepository.class,
+                                           PdfEventPort.class, SagaReplyPort.class)
+                    .newInstance(repository, pdfEventPort, sagaReplyPort);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to instantiate TaxInvoicePdfDocumentService", e);
+        }
     }
 
-    private TaxInvoicePdfDocument savedWith(GenerationStatus status) {
-        return TaxInvoicePdfDocument.builder()
+    private TaxInvoicePdfDocument createCompletedDocument() {
+        TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
                 .taxInvoiceId("tax-inv-001")
                 .taxInvoiceNumber("TXINV-001")
-                .status(status)
+                .status(GenerationStatus.GENERATING) // Start in GENERATING
+                .mimeType("application/pdf")
                 .build();
+        // Now transition to COMPLETED via the proper method
+        doc.markCompleted("2024/01/15/test.pdf", "http://localhost:9000/taxinvoices/test.pdf", 5000L);
+        doc.markXmlEmbedded();
+        return doc;
     }
 
     @Test
-    @DisplayName("generatePdf() uploads to MinIO and returns COMPLETED document")
-    void testGeneratePdf_Success() throws Exception {
-        byte[] pdfBytes = new byte[5000];
+    @DisplayName("findByTaxInvoiceId() delegates to repository")
+    void testFindByTaxInvoiceId() {
+        // Given
+        TaxInvoicePdfDocument doc = createCompletedDocument();
+        when(repository.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(doc));
 
-        // Repository returns the document passed to save()
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
-                .thenReturn(pdfBytes);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
+        // When
+        var service = getService();
+        Optional<TaxInvoicePdfDocument> result = service.findByTaxInvoiceId("tax-inv-001");
 
-        TaxInvoicePdfDocument result = service.generatePdf(
-                "tax-inv-001", "TXINV-001", "<xml/>", "{}");
-
-        assertThat(result.getStatus()).isEqualTo(GenerationStatus.COMPLETED);
-        assertThat(result.getFileSize()).isEqualTo(5000L);
-        assertThat(result.getDocumentUrl()).startsWith(BASE_URL + "/");
-        assertThat(result.getDocumentPath()).isNotBlank();
-        assertThat(result.isXmlEmbedded()).isTrue();
-
-        // Verify S3 upload happened with correct bucket
-        ArgumentCaptor<PutObjectRequest> putCaptor = ArgumentCaptor.forClass(PutObjectRequest.class);
-        verify(s3Client).putObject(putCaptor.capture(), any(RequestBody.class));
-        assertThat(putCaptor.getValue().bucket()).isEqualTo(BUCKET);
-        assertThat(putCaptor.getValue().contentType()).isEqualTo("application/pdf");
+        // Then
+        assertThat(result).isPresent();
+        assertThat(result.get().getTaxInvoiceNumber()).isEqualTo("TXINV-001");
     }
 
     @Test
-    @DisplayName("generatePdf() returns FAILED document without throwing when PDF generation fails")
-    void testGeneratePdf_PdfGenerationFails() throws Exception {
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
-                .thenThrow(new TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException(
-                        "FOP failed", null));
+    @DisplayName("beginGeneration() creates GENERATING document")
+    void testBeginGeneration() {
+        // Given
+        TaxInvoicePdfDocument savedDoc = TaxInvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
+                .status(GenerationStatus.GENERATING)
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-001")
+                .mimeType("application/pdf")
+                .build();
+        when(repository.save(any())).thenReturn(savedDoc);
 
-        // Must NOT throw — caller relies on the returned FAILED document to publish the saga reply
-        TaxInvoicePdfDocument result = service.generatePdf("tax-inv-001", "TXINV-001", "<xml/>", "{}");
+        // When
+        var service = getService();
+        service.beginGeneration("tax-inv-001", "TXINV-001");
 
-        assertThat(result.getStatus()).isEqualTo(GenerationStatus.FAILED);
-        assertThat(result.getErrorMessage()).isNotBlank();
+        // Then
+        ArgumentCaptor<TaxInvoicePdfDocument> captor = ArgumentCaptor.forClass(TaxInvoicePdfDocument.class);
+        verify(repository).save(captor.capture());
+
+        TaxInvoicePdfDocument toSave = captor.getValue();
+        assertThat(toSave.getTaxInvoiceId()).isEqualTo("tax-inv-001");
+        assertThat(toSave.getTaxInvoiceNumber()).isEqualTo("TXINV-001");
     }
 
     @Test
-    @DisplayName("deletePdfFile() sends DeleteObjectRequest to S3")
-    void testDeletePdfFile_Success() {
-        when(s3Client.deleteObject(any(DeleteObjectRequest.class)))
-                .thenReturn(DeleteObjectResponse.builder().build());
+    @DisplayName("deleteById() deletes document and flushes")
+    void testDeleteById() {
+        // When
+        var service = getService();
+        service.deleteById(UUID.randomUUID());
 
-        service.deletePdfFile("2024/01/15/taxinvoice-TXINV-001-abc.pdf");
-
-        ArgumentCaptor<DeleteObjectRequest> captor = ArgumentCaptor.forClass(DeleteObjectRequest.class);
-        verify(s3Client).deleteObject(captor.capture());
-        assertThat(captor.getValue().bucket()).isEqualTo(BUCKET);
-        assertThat(captor.getValue().key()).isEqualTo("2024/01/15/taxinvoice-TXINV-001-abc.pdf");
+        // Then
+        verify(repository).deleteById(any(UUID.class));
+        verify(repository).flush();
     }
 
     @Test
-    @DisplayName("deletePdfFile() wraps S3 exception in RuntimeException")
-    void testDeletePdfFile_S3Fails() {
-        when(s3Client.deleteObject(any(DeleteObjectRequest.class)))
-                .thenThrow(new RuntimeException("S3 unavailable"));
+    @DisplayName("publishIdempotentSuccess() publishes events for already completed document")
+    void testPublishIdempotentSuccess() {
+        // Given
+        TaxInvoicePdfDocument doc = createCompletedDocument();
+        KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
+                "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "doc-1", "tax-inv-001", "TXINV-001",
+                "http://minio:9000/signed.xml", "{}");
 
-        assertThatThrownBy(() -> service.deletePdfFile("some/key.pdf"))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Failed to delete PDF from MinIO");
+        // When
+        var service = getService();
+        service.publishIdempotentSuccess(doc, command);
+
+        // Then
+        verify(pdfEventPort).publishPdfGenerated(any(TaxInvoicePdfGeneratedEvent.class));
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "http://localhost:9000/taxinvoices/test.pdf", 5000L);
     }
 
     @Test
-    @DisplayName("generatePdf() S3 key follows YYYY/MM/DD/<filename> pattern")
-    void testGeneratePdf_S3KeyPattern() throws Exception {
-        byte[] pdfBytes = new byte[1000];
-        when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
-                .thenReturn(pdfBytes);
-        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
-                .thenReturn(PutObjectResponse.builder().build());
+    @DisplayName("publishRetryExhausted() publishes failure reply")
+    void testPublishRetryExhausted() {
+        // Given
+        KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
+                "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "doc-1", "tax-inv-001", "TXINV-001",
+                "http://minio:9000/signed.xml", "{}");
 
-        TaxInvoicePdfDocument result = service.generatePdf(
-                "tax-inv-001", "TXINV-001", "<xml/>", "{}");
+        // When
+        var service = getService();
+        service.publishRetryExhausted(command);
 
-        // documentPath is the S3 key; should match YYYY/MM/DD/taxinvoice-*.pdf
-        assertThat(result.getDocumentPath()).matches("\\d{4}/\\d{2}/\\d{2}/taxinvoice-.+\\.pdf");
-        // documentUrl = baseUrl + "/" + key
-        assertThat(result.getDocumentUrl())
-                .startsWith(BASE_URL + "/")
-                .endsWith(result.getDocumentPath());
+        // Then
+        verify(sagaReplyPort).publishFailure("saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "Maximum retry attempts exceeded");
+    }
+
+    @Test
+    @DisplayName("publishGenerationFailure() publishes failure with error message")
+    void testPublishGenerationFailure() {
+        // Given
+        KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
+                "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "doc-1", "tax-inv-001", "TXINV-001",
+                "http://minio:9000/signed.xml", "{}");
+        String errorMessage = "Invalid XML format";
+
+        // When
+        var service = getService();
+        service.publishGenerationFailure(command, errorMessage);
+
+        // Then
+        verify(sagaReplyPort).publishFailure("saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                errorMessage);
+    }
+
+    @Test
+    @DisplayName("publishCompensated() publishes COMPENSATED reply")
+    void testPublishCompensated() {
+        // Given
+        KafkaTaxInvoiceCompensateCommand command = new KafkaTaxInvoiceCompensateCommand(
+                "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "doc-1", "tax-inv-001");
+
+        // When
+        var service = getService();
+        service.publishCompensated(command);
+
+        // Then
+        verify(sagaReplyPort).publishCompensated("saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1");
+    }
+
+    @Test
+    @DisplayName("publishCompensationFailure() publishes failure for compensation error")
+    void testPublishCompensationFailure() {
+        // Given
+        KafkaTaxInvoiceCompensateCommand command = new KafkaTaxInvoiceCompensateCommand(
+                "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "doc-1", "tax-inv-001");
+        String error = "Failed to delete PDF file";
+
+        // When
+        var service = getService();
+        service.publishCompensationFailure(command, error);
+
+        // Then
+        verify(sagaReplyPort).publishFailure("saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1", error);
+    }
+
+    @Test
+    @DisplayName("completeGenerationAndPublish() marks COMPLETED and publishes events")
+    void testCompleteGenerationAndPublish() {
+        // Given
+        UUID documentId = UUID.randomUUID();
+        TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
+                .id(documentId)
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-001")
+                .status(GenerationStatus.GENERATING)
+                .mimeType("application/pdf")
+                .build();
+
+        // Create a completed document with the same ID for the mock return
+        TaxInvoicePdfDocument savedDoc = TaxInvoicePdfDocument.builder()
+                .id(documentId)
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-001")
+                .status(GenerationStatus.GENERATING)
+                .mimeType("application/pdf")
+                .build();
+        savedDoc.markCompleted("2024/01/15/test.pdf", "http://localhost:9000/taxinvoices/test.pdf", 5000L);
+        savedDoc.markXmlEmbedded();
+
+        when(repository.findById(documentId)).thenReturn(Optional.of(doc));
+        when(repository.save(any())).thenReturn(savedDoc);
+
+        KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
+                "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "doc-1", "tax-inv-001", "TXINV-001",
+                "http://minio:9000/signed.xml", "{}");
+
+        // When
+        var service = getService();
+        service.completeGenerationAndPublish(documentId, "2024/01/15/test.pdf",
+                "http://localhost:9000/taxinvoices/test.pdf", 5000L, 0, command);
+
+        // Then
+        ArgumentCaptor<TaxInvoicePdfDocument> captor = ArgumentCaptor.forClass(TaxInvoicePdfDocument.class);
+        verify(repository).save(captor.capture());
+
+        TaxInvoicePdfDocument saved = captor.getValue();
+        assertThat(saved.getStatus()).isEqualTo(GenerationStatus.COMPLETED);
+        assertThat(saved.isXmlEmbedded()).isTrue();
+
+        verify(pdfEventPort).publishPdfGenerated(any(TaxInvoicePdfGeneratedEvent.class));
+        verify(sagaReplyPort).publishSuccess("saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "http://localhost:9000/taxinvoices/test.pdf", 5000L);
+    }
+
+    @Test
+    @DisplayName("failGenerationAndPublish() marks FAILED and publishes failure")
+    void testFailGenerationAndPublish() {
+        // Given
+        UUID documentId = UUID.randomUUID();
+        TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
+                .id(documentId)
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-001")
+                .status(GenerationStatus.GENERATING)
+                .mimeType("application/pdf")
+                .build();
+        TaxInvoicePdfDocument savedDoc = TaxInvoicePdfDocument.builder()
+                .id(documentId)
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-001")
+                .status(GenerationStatus.FAILED)
+                .errorMessage("PDF generation failed")
+                .mimeType("application/pdf")
+                .build();
+        when(repository.findById(documentId)).thenReturn(Optional.of(doc));
+        when(repository.save(any())).thenReturn(savedDoc);
+
+        KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
+                "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
+                "doc-1", "tax-inv-001", "TXINV-001",
+                "http://minio:9000/signed.xml", "{}");
+        String errorMessage = "PDF generation failed";
+
+        // When
+        var service = getService();
+        service.failGenerationAndPublish(documentId, errorMessage, 0, command);
+
+        // Then
+        ArgumentCaptor<TaxInvoicePdfDocument> captor = ArgumentCaptor.forClass(TaxInvoicePdfDocument.class);
+        verify(repository).save(captor.capture());
+
+        TaxInvoicePdfDocument saved = captor.getValue();
+        assertThat(saved.getStatus()).isEqualTo(GenerationStatus.FAILED);
+        assertThat(saved.getErrorMessage()).isEqualTo(errorMessage);
+
+        verify(sagaReplyPort).publishFailure("saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1", errorMessage);
     }
 }

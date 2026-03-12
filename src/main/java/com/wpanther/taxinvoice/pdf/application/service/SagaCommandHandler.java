@@ -5,6 +5,7 @@ import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.pdf.application.port.out.SignedXmlFetchPort;
 import com.wpanther.taxinvoice.pdf.application.usecase.CompensateTaxInvoicePdfUseCase;
 import com.wpanther.taxinvoice.pdf.application.usecase.ProcessTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.domain.constants.PdfGenerationConstants;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;

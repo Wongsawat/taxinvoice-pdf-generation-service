@@ -1,5 +1,6 @@
 package com.wpanther.taxinvoice.pdf.domain.model;
 
+import com.wpanther.taxinvoice.pdf.domain.constants.PdfGenerationConstants;
 import com.wpanther.taxinvoice.pdf.domain.exception.TaxInvoicePdfGenerationException;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -47,7 +48,7 @@ public class TaxInvoicePdfDocument {
         this.documentPath = builder.documentPath;
         this.documentUrl = builder.documentUrl;
         this.fileSize = builder.fileSize;
-        this.mimeType = builder.mimeType != null ? builder.mimeType : "application/pdf";
+        this.mimeType = builder.mimeType != null ? builder.mimeType : PdfGenerationConstants.PDF_MIME_TYPE;
         this.xmlEmbedded = builder.xmlEmbedded;
         this.status = builder.status != null ? builder.status : GenerationStatus.PENDING;
         this.errorMessage = builder.errorMessage;

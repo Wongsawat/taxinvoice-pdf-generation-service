@@ -96,14 +96,22 @@ The four services touch completely disjoint files; branches merge into `main` wi
   site. Derive from existing test context where possible (e.g. `"corr-" + documentId`, or reuse
   a declared constant). Use a descriptive literal where no context is available.
 - Update `verify(...).publishEbmsSentNotification(...)` calls to include the new parameter.
-- `AsyncNotificationEventPublisherTest` has multiple `EbmsSentNotificationEvent.create()` call
-  sites — each one must receive the new `correlationId` argument.
-- `EbmsSentNotificationEventTest.shouldHaveJsonCreatorConstructor()` uses Java reflection:
-  `getDeclaredConstructor(...)` with an explicit parameter-type array. After adding `correlationId`
-  to the `@JsonCreator` constructor, insert `String.class` at position 5 (zero-indexed, between
-  `String.class` for `sagaId` and `String.class` for `source`). The resulting array must have
-  15 elements: `UUID, Instant, String, int, String, String, String, String, String, String, String,
-  String, Long, String, String`.
+- `AsyncNotificationEventPublisherTest` has **6** `EbmsSentNotificationEvent.create()` call
+  sites — each one must receive the new `correlationId` argument. (The production
+  `AsyncNotificationEventPublisher` class requires no changes.)
+- `EbmsSentNotificationEventTest.shouldHaveJsonCreatorConstructor()` uses Java reflection with an
+  explicit parameter-type array. After adding `correlationId` to the `@JsonCreator`, insert
+  `String.class` at position 5 (zero-indexed, between `String.class` for `sagaId` at position 4
+  and `String.class` for `source` at the original position 5). The resulting array must have
+  **15 elements**: `UUID.class, Instant.class, String.class, int.class, String.class, String.class,
+  String.class, String.class, String.class, String.class, String.class, String.class, String.class,
+  String.class, Instant.class` (the last `Instant.class` is `sentAt`; there is no `Long.class`).
+- `EbmsSentNotificationEventTest.shouldHavePrivateConstructor()` also uses `getDeclaredConstructor`.
+  The private creation constructor currently has 7 params `(String sagaId, String documentId,
+  String invoiceId, String invoiceNumber, String documentType, String ebmsMessageId, Instant sentAt)`.
+  After adding `String correlationId` as the second parameter (after `sagaId`), the array must have
+  **8 elements**: `String.class, String.class, String.class, String.class, String.class, String.class,
+  String.class, Instant.class`. Insert the new `String.class` at index 1.
 
 ---
 
@@ -116,8 +124,10 @@ The four services touch completely disjoint files; branches merge into `main` wi
 - Change creation constructor `super(null, SOURCE, TRACE_TYPE, null)` →
   `super(null, correlationId, SOURCE, TRACE_TYPE, null)`. External constructor signature is
   unchanged — `correlationId` is still the last parameter.
-- Update `@JsonCreator`: add `@JsonProperty("correlationId") String correlationId` parameter;
-  switch `super()` to 9-arg form.
+- Update `@JsonCreator`: the `correlationId` parameter **already exists** in the `@JsonCreator`
+  parameter list (it was wired to the now-removed subclass field). Do NOT add a duplicate parameter.
+  Change only the `super()` call body to the 9-arg form:
+  `super(eventId, occurredAt, eventType, version, null, correlationId, source, traceType, context)`.
 
 **Callers** — `InvoicePdfDocumentService.buildGeneratedEvent()`: no change needed.
 
@@ -138,8 +148,10 @@ The four services touch completely disjoint files; branches merge into `main` wi
 - Change creation constructor `super(invoiceId, SOURCE, TRACE_TYPE)` →
   `super(invoiceId, correlationId, SOURCE, TRACE_TYPE, null)`. External constructor signature
   unchanged — `correlationId` is still the last parameter.
-- Update `@JsonCreator`: add `@JsonProperty("correlationId") String correlationId` parameter;
-  switch `super()` to 9-arg form.
+- Update `@JsonCreator`: the `correlationId` parameter **already exists** in the `@JsonCreator`
+  parameter list (it was wired to the now-removed subclass field). Do NOT add a duplicate parameter.
+  Change only the `super()` call body to the 9-arg form:
+  `super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context)`.
 
 **Callers** — `SagaOrchestrationService`: no change needed.
 

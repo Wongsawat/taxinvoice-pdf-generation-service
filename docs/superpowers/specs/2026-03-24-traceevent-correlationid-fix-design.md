@@ -45,7 +45,8 @@ The four services touch completely disjoint files; branches merge into `main` wi
   `super(sagaId, correlationId, SOURCE, TRACE_TYPE, null)`.
 - Remove the `@JsonIgnore getCorrelationId()` override — `TraceEvent.getCorrelationId()` now
   handles this correctly.
-- Update `@JsonCreator`: add `@JsonProperty("correlationId") String correlationId` parameter;
+- Update `@JsonCreator`: insert `@JsonProperty("correlationId") String correlationId` between
+  the `sagaId` and `source` parameters (i.e., at position 6 in the parameter list, after `sagaId`);
   switch `super()` call to the 9-arg form:
   `super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context)`.
 
@@ -79,8 +80,14 @@ The four services touch completely disjoint files; branches merge into `main` wi
 
 **`EbmsSendingEventPublisher.java`**
 
-- `correlationId` is already in scope in `publishSuccess()`; pass it to
-  `notificationEventPublisher.publishEbmsSentNotification(...)`.
+- `correlationId` is already in scope in `publishSuccess()`; add it as a new argument in the
+  `notificationEventPublisher.publishEbmsSentNotification(...)` call inside `publishSuccess()`.
+  The call site must be updated to pass `correlationId` as the second argument (after `sagaId`).
+
+**`AsyncNotificationEventPublisher.java`**
+
+- No production code changes required; `AsyncNotificationEventPublisher` is a decorator/async
+  wrapper and does not call `EbmsSentNotificationEvent.create()` directly.
 
 **Tests** (`EbmsSentNotificationEventTest`, `NotificationEventPublisherTest`,
 `AsyncNotificationEventPublisherTest`, `EbmsSendingEventPublisherTest`)
@@ -89,6 +96,14 @@ The four services touch completely disjoint files; branches merge into `main` wi
   site. Derive from existing test context where possible (e.g. `"corr-" + documentId`, or reuse
   a declared constant). Use a descriptive literal where no context is available.
 - Update `verify(...).publishEbmsSentNotification(...)` calls to include the new parameter.
+- `AsyncNotificationEventPublisherTest` has multiple `EbmsSentNotificationEvent.create()` call
+  sites — each one must receive the new `correlationId` argument.
+- `EbmsSentNotificationEventTest.shouldHaveJsonCreatorConstructor()` uses Java reflection:
+  `getDeclaredConstructor(...)` with an explicit parameter-type array. After adding `correlationId`
+  to the `@JsonCreator` constructor, insert `String.class` at position 5 (zero-indexed, between
+  `String.class` for `sagaId` and `String.class` for `source`). The resulting array must have
+  15 elements: `UUID, Instant, String, int, String, String, String, String, String, String, String,
+  String, Long, String, String`.
 
 ---
 

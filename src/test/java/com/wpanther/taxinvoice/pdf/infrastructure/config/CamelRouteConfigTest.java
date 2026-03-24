@@ -97,7 +97,7 @@ class CamelRouteConfigTest {
     void testTaxInvoicePdfGeneratedEventSerialization() throws Exception {
         // Given
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
-                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "saga-001", "doc-123", "tax-inv-001", "TXINV-2024-001",
                 "http://example.com/doc.pdf", 12345L, true, "corr-456"
         );
 

@@ -252,9 +252,37 @@ notificationEventPublisher.publishEbmsSentNotification(
 **Files:**
 - Modify: `src/test/java/com/wpanther/ebmssending/domain/event/EbmsSentNotificationEventTest.java`
 
-- [ ] **Step 1: Add `correlationId` to all `create()` call sites**
+- [ ] **Step 1: Update `shouldCreateEventWithFullConstructor()` direct `@JsonCreator` call**
 
-`EbmsSentNotificationEventTest` has **13 existing** `EbmsSentNotificationEvent.create()` call sites (plus the new regression test from Task 1 which already uses the new signature). For each existing call site, insert a `correlationId` argument as the second argument (after `sagaId`). Derive a meaningful value from the existing test context. For example:
+`EbmsSentNotificationEventTest.shouldCreateEventWithFullConstructor()` (around line 64) directly calls the `@JsonCreator` constructor with positional arguments. After the fix the constructor has 15 params (new `correlationId` inserted between `sagaId` and `source`). Update this call:
+
+```java
+// BEFORE
+EbmsSentNotificationEvent event = new EbmsSentNotificationEvent(
+    eventId, occurredAt, eventType, version,
+    sagaId, source, traceType, context,
+    documentId, invoiceId, invoiceNumber, documentType,
+    ebmsMessageId, sentAt
+);
+
+// AFTER
+EbmsSentNotificationEvent event = new EbmsSentNotificationEvent(
+    eventId, occurredAt, eventType, version,
+    sagaId, "corr-" + sagaId,   // correlationId inserted between sagaId and source
+    source, traceType, context,
+    documentId, invoiceId, invoiceNumber, documentType,
+    ebmsMessageId, sentAt
+);
+```
+
+Also add an assertion to verify the value is correctly stored:
+```java
+assertEquals("corr-" + sagaId, event.getCorrelationId());
+```
+
+- [ ] **Step 2: Add `correlationId` to all `create()` call sites**
+
+`EbmsSentNotificationEventTest` has **14** `EbmsSentNotificationEvent.create()` call sites. For each, insert a `correlationId` argument as the second argument (after `sagaId`). Derive a meaningful value from the existing test context. For example:
 
 ```java
 // BEFORE

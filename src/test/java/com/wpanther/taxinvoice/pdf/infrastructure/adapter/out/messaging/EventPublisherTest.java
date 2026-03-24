@@ -88,7 +88,7 @@ class EventPublisherTest {
 
     @Test
     @DisplayName("TaxInvoicePdfGeneratedEvent stores sagaId and correlationId independently")
-    void testSagaIdAndCorrelationIdStoredIndependently() {
+    void testSagaIdAndCorrelationIdStoredIndependently() throws Exception {
         // Given
         String sagaId = "saga-001";
         String correlationId = "corr-456";
@@ -100,8 +100,14 @@ class EventPublisherTest {
                 "http://localhost:9000/taxinvoices/test.pdf", 12345L, true,
                 correlationId);
 
-        // Then
+        // Then — constructor stores fields independently
         assertThat(event.getSagaId()).isEqualTo(sagaId);
         assertThat(event.getCorrelationId()).isEqualTo(correlationId);
+
+        // And — JSON round-trip preserves both fields
+        String json = objectMapper.writeValueAsString(event);
+        TaxInvoicePdfGeneratedEvent deserialized = objectMapper.readValue(json, TaxInvoicePdfGeneratedEvent.class);
+        assertThat(deserialized.getSagaId()).isEqualTo(sagaId);
+        assertThat(deserialized.getCorrelationId()).isEqualTo(correlationId);
     }
 }

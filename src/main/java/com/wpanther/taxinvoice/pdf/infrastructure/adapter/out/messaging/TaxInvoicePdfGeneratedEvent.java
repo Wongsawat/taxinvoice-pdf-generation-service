@@ -39,6 +39,8 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
 
     /**
      * Convenience constructor for creating a new tax invoice PDF generated event.
+     * Both {@code sagaId} and {@code correlationId} are stored independently in
+     * the {@link TraceEvent} base class.
      */
     public TaxInvoicePdfGeneratedEvent(
             String sagaId,

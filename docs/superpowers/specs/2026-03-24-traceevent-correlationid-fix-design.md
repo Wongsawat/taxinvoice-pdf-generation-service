@@ -45,9 +45,8 @@ The four services touch completely disjoint files; branches merge into `main` wi
   `super(sagaId, correlationId, SOURCE, TRACE_TYPE, null)`.
 - Remove the `@JsonIgnore getCorrelationId()` override — `TraceEvent.getCorrelationId()` now
   handles this correctly.
-- Update `@JsonCreator`: insert `@JsonProperty("correlationId") String correlationId` between
-  the `sagaId` and `source` parameters (i.e., at position 6 in the parameter list, after `sagaId`);
-  switch `super()` call to the 9-arg form:
+- Update `@JsonCreator`: insert `@JsonProperty("correlationId") String correlationId` after the
+  `sagaId` parameter and before the `source` parameter; switch `super()` call to the 9-arg form:
   `super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context)`.
 
 **`TaxInvoicePdfDocumentService.java` — `buildGeneratedEvent()`**
@@ -95,7 +94,11 @@ The four services touch completely disjoint files; branches merge into `main` wi
 - Add a meaningful `correlationId` to every `create()` / `publishEbmsSentNotification()` call
   site. Derive from existing test context where possible (e.g. `"corr-" + documentId`, or reuse
   a declared constant). Use a descriptive literal where no context is available.
-- Update `verify(...).publishEbmsSentNotification(...)` calls to include the new parameter.
+- Update all `verify(notificationEventPublisher).publishEbmsSentNotification(...)` calls in
+  `EbmsSendingEventPublisherTest` to include the new `correlationId` argument.
+- Also update the three `verify(notificationEventPublisher, never()).publishEbmsSentNotification(
+  any(), any(), any(), any(), any(), any(), any())` calls (currently 7 `any()` matchers) to add
+  an eighth `any()` matcher for the new `correlationId` parameter.
 - `AsyncNotificationEventPublisherTest` has **6** `EbmsSentNotificationEvent.create()` call
   sites — each one must receive the new `correlationId` argument. (The production
   `AsyncNotificationEventPublisher` class requires no changes.)
@@ -128,6 +131,8 @@ The four services touch completely disjoint files; branches merge into `main` wi
   parameter list (it was wired to the now-removed subclass field). Do NOT add a duplicate parameter.
   Change only the `super()` call body to the 9-arg form:
   `super(eventId, occurredAt, eventType, version, null, correlationId, source, traceType, context)`.
+  Pass `null` for `sagaId` (the `@JsonCreator` already receives a `sagaId` parameter but this event
+  is a notification event, not saga-scoped, so `sagaId` intentionally stays null).
 
 **Callers** — `InvoicePdfDocumentService.buildGeneratedEvent()`: no change needed.
 

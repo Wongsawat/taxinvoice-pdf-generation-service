@@ -129,10 +129,12 @@ The four services touch completely disjoint files; branches merge into `main` wi
   unchanged — `correlationId` is still the last parameter.
 - Update `@JsonCreator`: the `correlationId` parameter **already exists** in the `@JsonCreator`
   parameter list (it was wired to the now-removed subclass field). Do NOT add a duplicate parameter.
-  Change only the `super()` call body to the 9-arg form:
+  Remove the `this.correlationId = correlationId;` assignment from the `@JsonCreator` body.
+  Change the `super()` call body to the 9-arg form:
   `super(eventId, occurredAt, eventType, version, null, correlationId, source, traceType, context)`.
-  Pass `null` for `sagaId` (the `@JsonCreator` already receives a `sagaId` parameter but this event
-  is a notification event, not saga-scoped, so `sagaId` intentionally stays null).
+  Pass `null` for `sagaId` intentionally — this is a notification event, not saga-scoped. The
+  `sagaId` `@JsonCreator` parameter stays in the parameter list for JSON compatibility but is
+  discarded.
 
 **Callers** — `InvoicePdfDocumentService.buildGeneratedEvent()`: no change needed.
 
@@ -151,11 +153,13 @@ The four services touch completely disjoint files; branches merge into `main` wi
 - Remove `private final String correlationId` field and its `@JsonProperty("correlationId")`
   annotation.
 - Change creation constructor `super(invoiceId, SOURCE, TRACE_TYPE)` →
-  `super(invoiceId, correlationId, SOURCE, TRACE_TYPE, null)`. External constructor signature
-  unchanged — `correlationId` is still the last parameter.
+  `super(invoiceId, correlationId, SOURCE, TRACE_TYPE, null)`. Also remove the
+  `this.correlationId = correlationId;` assignment from the creation constructor body.
+  External constructor signature unchanged — `correlationId` is still the last parameter.
 - Update `@JsonCreator`: the `correlationId` parameter **already exists** in the `@JsonCreator`
   parameter list (it was wired to the now-removed subclass field). Do NOT add a duplicate parameter.
-  Change only the `super()` call body to the 9-arg form:
+  Remove the `this.correlationId = correlationId;` assignment from the `@JsonCreator` body.
+  Change the `super()` call body to the 9-arg form:
   `super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context)`.
 
 **Callers** — `SagaOrchestrationService`: no change needed.

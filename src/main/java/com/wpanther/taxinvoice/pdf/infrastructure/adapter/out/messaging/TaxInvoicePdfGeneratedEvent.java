@@ -1,7 +1,6 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.wpanther.saga.domain.model.TraceEvent;
 import lombok.Getter;
@@ -39,9 +38,12 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
     private final boolean xmlEmbedded;
 
     /**
-     * Convenience constructor. correlationId is stored as sagaId in TraceEvent.
+     * Convenience constructor for creating a new tax invoice PDF generated event.
+     * Both {@code sagaId} and {@code correlationId} are stored independently in
+     * the {@link TraceEvent} base class.
      */
     public TaxInvoicePdfGeneratedEvent(
+            String sagaId,
             String documentId,
             String taxInvoiceId,
             String taxInvoiceNumber,
@@ -50,21 +52,13 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
             boolean xmlEmbedded,
             String correlationId
     ) {
-        super(correlationId, SOURCE, TRACE_TYPE, null);
+        super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
         this.documentId = documentId;
         this.taxInvoiceId = taxInvoiceId;
         this.taxInvoiceNumber = taxInvoiceNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
-    }
-
-    /**
-     * Returns the correlation ID (stored as sagaId in TraceEvent).
-     */
-    @JsonIgnore
-    public String getCorrelationId() {
-        return getSagaId();
     }
 
     @Override
@@ -79,6 +73,7 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
             @JsonProperty("eventType") String eventType,
             @JsonProperty("version") int version,
             @JsonProperty("sagaId") String sagaId,
+            @JsonProperty("correlationId") String correlationId,
             @JsonProperty("source") String source,
             @JsonProperty("traceType") String traceType,
             @JsonProperty("context") String context,
@@ -89,7 +84,7 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
             @JsonProperty("fileSize") long fileSize,
             @JsonProperty("xmlEmbedded") boolean xmlEmbedded
     ) {
-        super(eventId, occurredAt, eventType, version, sagaId, source, traceType, context);
+        super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context);
         this.documentId = documentId;
         this.taxInvoiceId = taxInvoiceId;
         this.taxInvoiceNumber = taxInvoiceNumber;

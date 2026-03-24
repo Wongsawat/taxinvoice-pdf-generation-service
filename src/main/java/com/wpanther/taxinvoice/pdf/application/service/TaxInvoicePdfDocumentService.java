@@ -163,6 +163,7 @@ public class TaxInvoicePdfDocumentService {
     private TaxInvoicePdfGeneratedEvent buildGeneratedEvent(TaxInvoicePdfDocument doc,
                                                              KafkaTaxInvoiceProcessCommand command) {
         return new TaxInvoicePdfGeneratedEvent(
+                command.getSagaId(),
                 command.getDocumentId(),
                 doc.getTaxInvoiceId(),
                 doc.getTaxInvoiceNumber(),

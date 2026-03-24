@@ -47,7 +47,7 @@ class EventPublisherTest {
         String correlationId = "corr-456";
 
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
-                documentId, taxInvoiceId, taxInvoiceNumber, documentUrl, fileSize, xmlEmbedded, correlationId);
+                "saga-001", documentId, taxInvoiceId, taxInvoiceNumber, documentUrl, fileSize, xmlEmbedded, correlationId);
 
         // When
         eventPublisher.publishPdfGenerated(event);
@@ -68,7 +68,7 @@ class EventPublisherTest {
     void testPublishPdfGenerated_Headers() {
         // Given
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
-                "doc-123", "tax-inv-001", "TXINV-001",
+                "saga-001", "doc-123", "tax-inv-001", "TXINV-001",
                 "http://localhost:9000/taxinvoices/test.pdf", 12345L, true, "corr-456");
 
         // When
@@ -84,5 +84,30 @@ class EventPublisherTest {
         String headersJson = headersCaptor.getValue();
         assertThat(headersJson).contains("\"documentType\":\"TAX_INVOICE\"");
         assertThat(headersJson).contains("\"correlationId\":\"corr-456\"");
+    }
+
+    @Test
+    @DisplayName("TaxInvoicePdfGeneratedEvent stores sagaId and correlationId independently")
+    void testSagaIdAndCorrelationIdStoredIndependently() throws Exception {
+        // Given
+        String sagaId = "saga-001";
+        String correlationId = "corr-456";
+
+        // When
+        TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
+                sagaId,
+                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "http://localhost:9000/taxinvoices/test.pdf", 12345L, true,
+                correlationId);
+
+        // Then — constructor stores fields independently
+        assertThat(event.getSagaId()).isEqualTo(sagaId);
+        assertThat(event.getCorrelationId()).isEqualTo(correlationId);
+
+        // And — JSON round-trip preserves both fields
+        String json = objectMapper.writeValueAsString(event);
+        TaxInvoicePdfGeneratedEvent deserialized = objectMapper.readValue(json, TaxInvoicePdfGeneratedEvent.class);
+        assertThat(deserialized.getSagaId()).isEqualTo(sagaId);
+        assertThat(deserialized.getCorrelationId()).isEqualTo(correlationId);
     }
 }

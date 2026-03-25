@@ -1,8 +1,8 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.config;
 
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -11,14 +11,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
-import java.time.Duration;
-
 /**
- * Configuration for RestTemplate with timeout and circuit breaker settings.
+ * Configuration for RestTemplate with timeout settings.
  * <p>
  * The RestTemplate is configured with connect and read timeouts to prevent
- * thread exhaustion when the signed XML service is unresponsive. A circuit
- * breaker is also configured to fail fast when the upstream service is degraded.
+ * thread exhaustion when the signed XML service is unresponsive.
+ * <p>
+ * Circuit breakers are configured via application.yml under resilience4j.circuitbreaker:
+ * - signedXmlFetch: for signed XML fetch operations
+ * - minio: for MinIO S3 operations
  */
 @Configuration
 @Slf4j
@@ -29,6 +30,31 @@ public class RestTemplateConfig {
 
     @Value("${app.rest-client.read-timeout:30000}")
     private int readTimeout;
+
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
+
+    public RestTemplateConfig(CircuitBreakerRegistry circuitBreakerRegistry) {
+        this.circuitBreakerRegistry = circuitBreakerRegistry;
+    }
+
+    /**
+     * Set up circuit breaker event logging after Spring context initialization.
+     */
+    @PostConstruct
+    public void setupCircuitBreakerLogging() {
+        CircuitBreaker signedXmlFetch = circuitBreakerRegistry.circuitBreaker("signedXmlFetch");
+        CircuitBreaker minio = circuitBreakerRegistry.circuitBreaker("minio");
+
+        signedXmlFetch.getEventPublisher()
+                .onStateTransition(event -> log.info("Circuit breaker 'signedXmlFetch' state transition: {}",
+                        event.getStateTransition()));
+
+        minio.getEventPublisher()
+                .onStateTransition(event -> log.info("Circuit breaker 'minio' state transition: {}",
+                        event.getStateTransition()));
+
+        log.info("Circuit breaker event logging configured for 'signedXmlFetch' and 'minio'");
+    }
 
     /**
      * RestTemplate with configured timeouts for fetching signed XML documents.
@@ -48,34 +74,5 @@ public class RestTemplateConfig {
                 connectTimeout, readTimeout);
 
         return new RestTemplate(factory);
-    }
-
-    /**
-     * Circuit breaker for signed XML fetch operations.
-     * <p>
-     * Opens after 50% failure rate with minimum 5 calls, and remains open
-     * for 60 seconds before attempting a half-open state.
-     */
-    @Bean
-    public CircuitBreaker signedXmlFetchCircuitBreaker(CircuitBreakerRegistry registry) {
-        CircuitBreakerConfig config = CircuitBreakerConfig.custom()
-                .slidingWindowSize(10)
-                .failureRateThreshold(50)
-                .waitDurationInOpenState(Duration.ofSeconds(60))
-                .permittedNumberOfCallsInHalfOpenState(3)
-                .slowCallRateThreshold(50)
-                .slowCallDurationThreshold(Duration.ofSeconds(3))
-                .build();
-
-        CircuitBreaker circuitBreaker = registry.circuitBreaker("signedXmlFetch", config);
-
-        circuitBreaker.getEventPublisher()
-                .onStateTransition(event -> log.info("Circuit breaker 'signedXmlFetch' state transition: {}",
-                        event.getStateTransition()));
-
-        log.info("Configured circuit breaker 'signedXmlFetch' with failureRateThreshold=50%, " +
-                "waitDurationInOpenState=60s, slowCallDurationThreshold=3s");
-
-        return circuitBreaker;
     }
 }

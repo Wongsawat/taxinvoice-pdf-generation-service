@@ -38,11 +38,15 @@ public class FopTaxInvoicePdfGenerator {
     private final TransformerFactory transformerFactory;
     private final Templates cachedTemplates;
 
-    public FopTaxInvoicePdfGenerator() throws Exception {
-        this.fopFactory = createFopFactory();
-        this.transformerFactory = TransformerFactory.newInstance();
-        this.cachedTemplates = compileTemplates(TAXINVOICE_XSL_PATH);
-        log.info("FopTaxInvoicePdfGenerator initialized with config: {}", FOP_CONFIG_PATH);
+    public FopTaxInvoicePdfGenerator() {
+        try {
+            this.fopFactory = createFopFactory();
+            this.transformerFactory = TransformerFactory.newInstance();
+            this.cachedTemplates = compileTemplates(TAXINVOICE_XSL_PATH);
+            log.info("FopTaxInvoicePdfGenerator initialized with config: {}", FOP_CONFIG_PATH);
+        } catch (Exception e) {
+            throw new PdfInitializationException("Failed to initialize FOP PDF generator: " + e.getMessage(), e);
+        }
     }
 
     private Templates compileTemplates(String xslPath) throws Exception {
@@ -158,7 +162,7 @@ public class FopTaxInvoicePdfGenerator {
     }
 
     /**
-     * Exception thrown when PDF generation fails
+     * Exception thrown when PDF generation fails during runtime
      */
     public static class PdfGenerationException extends Exception {
         public PdfGenerationException(String message) {
@@ -166,6 +170,21 @@ public class FopTaxInvoicePdfGenerator {
         }
 
         public PdfGenerationException(String message, Throwable cause) {
+            super(message, cause);
+        }
+    }
+
+    /**
+     * Exception thrown when PDF generator initialization fails at startup.
+     * This represents a configuration or resource loading error that prevents
+     * the application from starting properly.
+     */
+    public static class PdfInitializationException extends RuntimeException {
+        public PdfInitializationException(String message) {
+            super(message);
+        }
+
+        public PdfInitializationException(String message, Throwable cause) {
             super(message, cause);
         }
     }

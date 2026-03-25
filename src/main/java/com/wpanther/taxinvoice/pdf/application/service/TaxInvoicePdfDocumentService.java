@@ -7,6 +7,7 @@ import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.metrics.PdfGenerationMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class TaxInvoicePdfDocumentService {
     private final TaxInvoicePdfDocumentRepository repository;
     private final PdfEventPort pdfEventPort;
     private final SagaReplyPort sagaReplyPort;
+    private final PdfGenerationMetrics pdfGenerationMetrics;
 
     @Transactional(readOnly = true)
     public Optional<TaxInvoicePdfDocument> findByTaxInvoiceId(String taxInvoiceId) {
@@ -125,6 +127,10 @@ public class TaxInvoicePdfDocumentService {
 
     @Transactional
     public void publishRetryExhausted(KafkaTaxInvoiceProcessCommand command) {
+        pdfGenerationMetrics.recordRetryExhausted(
+                command.getSagaId(),
+                command.getTaxInvoiceId(),
+                command.getTaxInvoiceNumber());
         sagaReplyPort.publishFailure(
                 command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
                 "Maximum retry attempts exceeded");

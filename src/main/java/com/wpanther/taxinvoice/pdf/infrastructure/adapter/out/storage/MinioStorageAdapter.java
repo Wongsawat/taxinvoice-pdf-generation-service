@@ -9,10 +9,15 @@ import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
+import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.S3Object;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Component
 @Slf4j
@@ -96,5 +101,41 @@ public class MinioStorageAdapter implements PdfStoragePort {
                 .key(s3Key)
                 .build());
         log.info("Deleted PDF from MinIO: bucket={}, key={}", bucketName, s3Key);
+    }
+
+    /**
+     * List all PDF objects in the MinIO bucket.
+     * <p>
+     * Used by periodic cleanup job to find orphaned objects.
+     * This operation bypasses the circuit breaker as it's a maintenance task.
+     *
+     * @return list of all S3 object keys in the bucket
+     */
+    public List<String> listAllPdfs() {
+        ListObjectsV2Request request = ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .build();
+        ListObjectsV2Response response = s3Client.listObjectsV2(request);
+        return response.contents().stream()
+                .map(S3Object::key)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Delete an object from MinIO without circuit breaker protection.
+     * <p>
+     * Used by periodic cleanup job to remove orphaned objects.
+     * Failures are logged but do not throw exceptions to avoid
+     * interrupting batch cleanup operations.
+     *
+     * @param s3Key the S3 object key to delete
+     */
+    public void deleteWithoutCircuitBreaker(String s3Key) {
+        try {
+            doDelete(s3Key);
+        } catch (Exception e) {
+            log.warn("Failed to delete orphaned PDF from MinIO: bucket={}, key={}, error={}",
+                    bucketName, s3Key, e.getMessage());
+        }
     }
 }

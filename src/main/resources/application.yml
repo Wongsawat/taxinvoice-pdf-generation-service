@@ -63,12 +63,35 @@ app:
     region: ${MINIO_REGION:us-east-1}
     base-url: ${MINIO_BASE_URL:http://localhost:9000/taxinvoices}
     path-style-access: ${MINIO_PATH_STYLE_ACCESS:true}
+    # Orphaned PDF cleanup - disabled by default, enable with MINIO_CLEANUP_ENABLED=true
+    cleanup:
+      enabled: ${MINIO_CLEANUP_ENABLED:false}
+      cron: ${MINIO_CLEANUP_CRON:0 0 2 * * ?}  # Daily at 2 AM
   pdf:
     generation:
       max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}
+
+# Resilience4j Circuit Breaker
+resilience4j:
+  circuitbreaker:
+    instances:
+      minio:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 3s
+      signedXmlFetch:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 3
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 3s
 
 # Eureka client configuration
 eureka:

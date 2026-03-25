@@ -254,6 +254,9 @@
                 <configuration>
                     <source>21</source>
                     <target>21</target>
+                    <!-- Only Lombok annotation processor needed - this service uses
+                         Hexagonal Architecture (ports/adapters pattern) instead of
+                         MapStruct mappers for domain-to-entity mapping. -->
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>

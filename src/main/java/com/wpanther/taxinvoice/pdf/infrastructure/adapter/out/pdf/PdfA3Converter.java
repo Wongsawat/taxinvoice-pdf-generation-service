@@ -132,32 +132,44 @@ public class PdfA3Converter {
             return;
         }
 
-        // Load ICC profile
-        InputStream iccStream = null;
-        try {
-            ClassPathResource iccResource = new ClassPathResource(ICC_PROFILE_PATH);
-            if (iccResource.exists()) {
-                iccStream = iccResource.getInputStream();
-            } else {
-                // Use built-in sRGB profile as fallback
-                log.warn("ICC profile not found at {}, using system default", ICC_PROFILE_PATH);
-                iccStream = PdfA3Converter.class.getResourceAsStream("/org/apache/pdfbox/resources/icc/ISOcoated_v2_300_bas.icc");
-            }
-
-            if (iccStream != null) {
-                PDOutputIntent outputIntent = new PDOutputIntent(document, iccStream);
-                outputIntent.setInfo("sRGB IEC61966-2.1");
-                outputIntent.setOutputCondition("sRGB");
-                outputIntent.setOutputConditionIdentifier("sRGB IEC61966-2.1");
-                outputIntent.setRegistryName("http://www.color.org");
-                catalog.addOutputIntent(outputIntent);
-                log.debug("Added sRGB ICC color profile");
-            }
-        } finally {
-            if (iccStream != null) {
-                iccStream.close();
-            }
+        // Load ICC profile using try-with-resources
+        try (InputStream iccStream = loadIccProfile()) {
+            PDOutputIntent outputIntent = new PDOutputIntent(document, iccStream);
+            outputIntent.setInfo("sRGB IEC61966-2.1");
+            outputIntent.setOutputCondition("sRGB");
+            outputIntent.setOutputConditionIdentifier("sRGB IEC61966-2.1");
+            outputIntent.setRegistryName("http://www.color.org");
+            catalog.addOutputIntent(outputIntent);
+            log.debug("Added sRGB ICC color profile");
         }
+    }
+
+    /**
+     * Load ICC color profile from classpath or use PDFBox built-in fallback.
+     *
+     * @return InputStream containing the ICC profile data
+     * @throws IllegalStateException if ICC profile cannot be found
+     */
+    private InputStream loadIccProfile() {
+        ClassPathResource iccResource = new ClassPathResource(ICC_PROFILE_PATH);
+        if (iccResource.exists()) {
+            try {
+                return iccResource.getInputStream();
+            } catch (Exception e) {
+                log.warn("Failed to read ICC profile at {}, using fallback: {}", ICC_PROFILE_PATH, e.getMessage());
+            }
+        } else {
+            log.warn("ICC profile not found at {}, using system default", ICC_PROFILE_PATH);
+        }
+
+        // Use built-in sRGB profile as fallback
+        InputStream fallback = PdfA3Converter.class.getResourceAsStream(
+                "/org/apache/pdfbox/resources/icc/ISOcoated_v2_300_bas.icc");
+        if (fallback == null) {
+            throw new IllegalStateException("ICC profile not found at " + ICC_PROFILE_PATH +
+                    " and PDFBox built-in profile is unavailable");
+        }
+        return fallback;
     }
 
     /**

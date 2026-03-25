@@ -58,9 +58,8 @@ public class TaxInvoicePdfDocumentService {
                 .taxInvoiceNumber(taxInvoiceNumber)
                 .build();
         doc.startGeneration();
-        for (int i = 0; i < previousRetryCount + 1; i++) {
-            doc.incrementRetryCount();
-        }
+        // Restore retry count state (+1 for current attempt)
+        doc.setRetryCount(previousRetryCount + 1);
         return repository.save(doc);
     }
 
@@ -152,12 +151,16 @@ public class TaxInvoicePdfDocumentService {
                 });
     }
 
+    /**
+     * Restore retry count state when replacing a document.
+     * Sets retryCount to previousRetryCount + 1 to account for the current retry attempt.
+     *
+     * @param doc the document to update
+     * @param previousRetryCount the retry count from the previous document attempt (-1 if no previous attempt)
+     */
     private void applyRetryCount(TaxInvoicePdfDocument doc, int previousRetryCount) {
         if (previousRetryCount < 0) return;
-        int target = previousRetryCount + 1;
-        while (doc.getRetryCount() < target) {
-            doc.incrementRetryCount();
-        }
+        doc.setRetryCount(previousRetryCount + 1);
     }
 
     private TaxInvoicePdfGeneratedEvent buildGeneratedEvent(TaxInvoicePdfDocument doc,

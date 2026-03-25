@@ -1,8 +1,7 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.storage;
 
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfStoragePort;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -19,6 +18,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+/**
+ * MinIO/S3-backed implementation of {@link PdfStoragePort}.
+ * All AWS SDK types are confined to this adapter.
+ */
 @Component
 @Slf4j
 public class MinioStorageAdapter implements PdfStoragePort {
@@ -26,27 +29,26 @@ public class MinioStorageAdapter implements PdfStoragePort {
     private final S3Client s3Client;
     private final String bucketName;
     private final String baseUrl;
-    private final CircuitBreaker circuitBreaker;
 
     public MinioStorageAdapter(
             S3Client s3Client,
             @Value("${app.minio.bucket-name}") String bucketName,
-            @Value("${app.minio.base-url}") String baseUrl,
-            CircuitBreakerRegistry circuitBreakerRegistry) {
+            @Value("${app.minio.base-url}") String baseUrl) {
         this.s3Client = s3Client;
         this.bucketName = bucketName;
         this.baseUrl = baseUrl;
-        this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("minio");
     }
 
     @Override
+    @CircuitBreaker(name = "minio")
     public String store(String taxInvoiceNumber, byte[] pdfBytes) {
-        return CircuitBreaker.decorateSupplier(circuitBreaker, () -> doStore(taxInvoiceNumber, pdfBytes)).get();
+        return doStore(taxInvoiceNumber, pdfBytes);
     }
 
     @Override
+    @CircuitBreaker(name = "minio")
     public void delete(String s3Key) {
-        CircuitBreaker.decorateRunnable(circuitBreaker, () -> doDelete(s3Key)).run();
+        doDelete(s3Key);
     }
 
     @Override

@@ -1,6 +1,5 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.storage;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,8 +26,7 @@ class MinioStorageAdapterTest {
 
     @BeforeEach
     void setUp() {
-        CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();
-        adapter = new MinioStorageAdapter(s3Client, "test-bucket", "http://localhost:9000/test-bucket", registry);
+        adapter = new MinioStorageAdapter(s3Client, "test-bucket", "http://localhost:9000/test-bucket");
     }
 
     @Test

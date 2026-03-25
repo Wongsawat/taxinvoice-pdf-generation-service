@@ -65,4 +65,27 @@ class MinioStorageAdapterTest {
         assertThatThrownBy(() -> adapter.delete("bad-key"))
                 .isInstanceOf(RuntimeException.class);
     }
+
+    @Test
+    void store_preservesThaiCharacters() {
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+
+        String key = adapter.store("INV-ไทย-001", new byte[]{1, 2, 3});
+
+        assertThat(key).contains("taxinvoice-INV-ไทย-001-");
+        verify(s3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
+
+    @Test
+    void store_sanitizesProblematicCharacters() {
+        when(s3Client.putObject(any(PutObjectRequest.class), any(RequestBody.class)))
+                .thenReturn(PutObjectResponse.builder().build());
+
+        String key = adapter.store("INV:test<>|001", new byte[]{1, 2, 3});
+
+        // Should replace : < > | with underscores
+        assertThat(key).contains("taxinvoice-INV_test___001-");
+        verify(s3Client).putObject(any(PutObjectRequest.class), any(RequestBody.class));
+    }
 }

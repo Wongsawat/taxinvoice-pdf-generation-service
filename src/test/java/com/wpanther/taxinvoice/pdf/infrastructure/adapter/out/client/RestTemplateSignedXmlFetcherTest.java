@@ -1,7 +1,5 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.client;
 
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
@@ -10,7 +8,6 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.*;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.*;
 
@@ -18,15 +15,13 @@ class RestTemplateSignedXmlFetcherTest {
 
     private RestTemplate restTemplate;
     private MockRestServiceServer mockServer;
-    private CircuitBreaker circuitBreaker;
     private RestTemplateSignedXmlFetcher fetcher;
 
     @BeforeEach
     void setUp() {
         restTemplate = new RestTemplate();
         mockServer = MockRestServiceServer.createServer(restTemplate);
-        circuitBreaker = mock(CircuitBreaker.class);
-        fetcher = new RestTemplateSignedXmlFetcher(restTemplate, circuitBreaker);
+        fetcher = new RestTemplateSignedXmlFetcher(restTemplate);
     }
 
     @Test

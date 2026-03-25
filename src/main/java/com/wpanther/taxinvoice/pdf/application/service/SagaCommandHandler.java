@@ -207,6 +207,8 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishOrchestrationFailure(KafkaTaxInvoiceProcessCommand command, Throwable cause) {
+        // MDC is thread-local and preserved across @Transactional boundaries.
+        // This method is called from SagaRouteConfig DLQ handler with MDC already set.
         try {
             sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
                     command.getCorrelationId(),
@@ -218,6 +220,8 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void publishCompensationOrchestrationFailure(KafkaTaxInvoiceCompensateCommand command, Throwable cause) {
+        // MDC is thread-local and preserved across @Transactional boundaries.
+        // This method is called from SagaRouteConfig DLQ handler with MDC already set.
         try {
             sagaReplyPort.publishFailure(command.getSagaId(), command.getSagaStep(),
                     command.getCorrelationId(),

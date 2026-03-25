@@ -18,9 +18,16 @@ import java.util.UUID;
 /**
  * Application service for TaxInvoicePdfDocument lifecycle.
  *
- * Each method is a short, focused @Transactional unit — no CPU or network I/O inside any transaction.
- * TX1: beginGeneration() / replaceAndBeginGeneration()
- * TX2: completeGenerationAndPublish() / failGenerationAndPublish()
+ * <p>MDC Context: This service relies on MDC context being set by the caller
+ * (SagaCommandHandler) for correlation IDs and saga IDs. MDC is thread-local
+ * and is preserved across @Transactional boundaries since transactions do not
+ * switch threads.</p>
+ *
+ * <p>Each method is a short, focused @Transactional unit — no CPU or network I/O
+ * inside any transaction.</p>
+ *
+ * <p>TX1: beginGeneration() / replaceAndBeginGeneration()
+ * TX2: completeGenerationAndPublish() / failGenerationAndPublish()</p>
  */
 @Service
 @RequiredArgsConstructor

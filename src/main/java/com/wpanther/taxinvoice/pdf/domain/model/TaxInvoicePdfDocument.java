@@ -142,10 +142,23 @@ public class TaxInvoicePdfDocument {
     }
 
     /**
-     * Increment retry count
+     * Increment retry count by one
      */
     public void incrementRetryCount() {
         this.retryCount++;
+    }
+
+    /**
+     * Set retry count to a specific value.
+     * Used when restoring retry state during document replacement.
+     *
+     * @param retryCount the new retry count value (must be non-negative)
+     */
+    public void setRetryCount(int retryCount) {
+        if (retryCount < 0) {
+            throw new IllegalArgumentException("Retry count cannot be negative");
+        }
+        this.retryCount = retryCount;
     }
 
     /**

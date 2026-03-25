@@ -43,6 +43,11 @@ camel:
 
 # Application-specific configuration
 app:
+  # Font health check - validates Thai fonts at startup (enabled by default)
+  fonts:
+    health-check:
+      enabled: ${FONT_HEALTH_CHECK_ENABLED:true}
+      fail-on-error: ${FONT_HEALTH_CHECK_FAIL_ON_ERROR:true}
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     consumer:

@@ -122,10 +122,10 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                             document.getId(), s3Key, fileUrl, pdfBytes.length, previousRetryCount, command);
 
                 } catch (CallNotPermittedException e) {
-                    log.warn("MinIO CB OPEN for saga {} taxInvoice {}: {}",
+                    log.warn("Circuit breaker OPEN for saga {} taxInvoice {}: {}",
                             command.getSagaId(), taxInvoiceNum, e.getMessage());
                     pdfDocumentService.failGenerationAndPublish(
-                            document.getId(), "MinIO circuit breaker open: " + e.getMessage(),
+                            document.getId(), "Circuit breaker open: " + e.getMessage(),
                             previousRetryCount, command);
 
                 } catch (Exception e) {

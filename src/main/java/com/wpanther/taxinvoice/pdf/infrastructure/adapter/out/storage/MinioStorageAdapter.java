@@ -51,7 +51,7 @@ public class MinioStorageAdapter implements PdfStoragePort {
 
     private String doStore(String taxInvoiceNumber, byte[] pdfBytes) {
         LocalDate now = LocalDate.now();
-        String safeName = taxInvoiceNumber.replaceAll("[^a-zA-Z0-9\\-_]", "_");
+        String safeName = sanitizeFilename(taxInvoiceNumber);
         String fileName = String.format("taxinvoice-%s-%s.pdf", safeName, UUID.randomUUID());
         String s3Key = String.format("%04d/%02d/%02d/%s",
                 now.getYear(), now.getMonthValue(), now.getDayOfMonth(), fileName);
@@ -66,6 +66,28 @@ public class MinioStorageAdapter implements PdfStoragePort {
         s3Client.putObject(put, RequestBody.fromBytes(pdfBytes));
         log.debug("Uploaded PDF to MinIO: bucket={}, key={}", bucketName, s3Key);
         return s3Key;
+    }
+
+    /**
+     * Sanitize invoice number for use in S3 object key.
+     * <p>
+     * Preserves Unicode characters (including Thai) while removing characters
+     * problematic for file systems and URLs. S3 supports Unicode in object keys.
+     * <p>
+     * Removed characters:
+     * - Control characters (0x00-0x1F, 0x7F)
+     * - File system path separators: \ (backslash)
+     * - URL problematic: " ' * ? < > | : & ; space
+     * - Reserved for S3 special handling: @
+     *
+     * @param invoiceNumber the raw invoice number
+     * @return sanitized filename safe for S3 and file systems
+     */
+    private String sanitizeFilename(String invoiceNumber) {
+        // Remove control characters and problematic file system/URL characters
+        // Preserves alphanumeric, Thai/Unicode characters, and safe special chars
+        return invoiceNumber.replaceAll("[\\x00-\\x1F\\x7F\\\\\"'*?<>|:&; @]", "_")
+                .replaceAll("\\s+", "_");  // Replace whitespace with single underscore
     }
 
     private void doDelete(String s3Key) {

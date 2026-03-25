@@ -9,6 +9,7 @@ import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentReposi
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.infrastructure.metrics.PdfGenerationMetrics;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,14 +37,18 @@ class TaxInvoicePdfDocumentServiceTest {
     @Mock
     private SagaReplyPort sagaReplyPort;
 
+    @Mock
+    private PdfGenerationMetrics pdfGenerationMetrics;
+
     // Note: Using reflection to instantiate because Lombok @RequiredArgsConstructor
     // is scope=provided, not available during test compilation
     private TaxInvoicePdfDocumentService getService() {
         try {
             return TaxInvoicePdfDocumentService.class
                     .getDeclaredConstructor(TaxInvoicePdfDocumentRepository.class,
-                                           PdfEventPort.class, SagaReplyPort.class)
-                    .newInstance(repository, pdfEventPort, sagaReplyPort);
+                                           PdfEventPort.class, SagaReplyPort.class,
+                                           PdfGenerationMetrics.class)
+                    .newInstance(repository, pdfEventPort, sagaReplyPort, pdfGenerationMetrics);
         } catch (Exception e) {
             throw new RuntimeException("Failed to instantiate TaxInvoicePdfDocumentService", e);
         }

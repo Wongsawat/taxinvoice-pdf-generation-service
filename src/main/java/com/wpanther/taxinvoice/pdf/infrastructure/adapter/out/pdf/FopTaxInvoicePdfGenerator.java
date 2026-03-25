@@ -26,6 +26,11 @@ import java.nio.charset.StandardCharsets;
  *
  * This class transforms XML tax invoice data using an XSL-FO stylesheet
  * to produce PDF output.
+ *
+ * <p>Thread-safety: The XSL template is pre-compiled once at startup into a
+ * {@link Templates} object (which is thread-safe by the JAXP contract).
+ * {@link TransformerFactory} is used only locally during initialization
+ * and is NOT retained as an instance field because it is not thread-safe.
  */
 @Component
 @Slf4j
@@ -35,27 +40,27 @@ public class FopTaxInvoicePdfGenerator {
     private static final String TAXINVOICE_XSL_PATH = "xsl/taxinvoice.xsl";
 
     private final FopFactory fopFactory;
-    private final TransformerFactory transformerFactory;
     private final Templates cachedTemplates;
 
     public FopTaxInvoicePdfGenerator() {
         try {
             this.fopFactory = createFopFactory();
-            this.transformerFactory = TransformerFactory.newInstance();
-            this.cachedTemplates = compileTemplates(TAXINVOICE_XSL_PATH);
+            // TransformerFactory used ONLY here (single-threaded at startup) — not retained
+            TransformerFactory tf = TransformerFactory.newInstance();
+            this.cachedTemplates = compileTemplates(tf, TAXINVOICE_XSL_PATH);
             log.info("FopTaxInvoicePdfGenerator initialized with config: {}", FOP_CONFIG_PATH);
         } catch (Exception e) {
             throw new PdfInitializationException("Failed to initialize FOP PDF generator: " + e.getMessage(), e);
         }
     }
 
-    private Templates compileTemplates(String xslPath) throws Exception {
+    private Templates compileTemplates(TransformerFactory tf, String xslPath) throws Exception {
         ClassPathResource xslResource = new ClassPathResource(xslPath);
         if (!xslResource.exists()) {
             throw new IllegalStateException("XSL template not found at startup: " + xslPath);
         }
         try (InputStream is = xslResource.getInputStream()) {
-            return transformerFactory.newTemplates(new StreamSource(is));
+            return tf.newTemplates(new StreamSource(is));
         }
     }
 
@@ -127,13 +132,17 @@ public class FopTaxInvoicePdfGenerator {
             return generatePdf(xmlData);
         }
         log.debug("Generating PDF with template: {}", xslPath);
+        // Create a new TransformerFactory for this on-demand compilation.
+        // This method is not performance-critical (alternative template path),
+        // so the overhead of creating a new TransformerFactory is acceptable.
+        TransformerFactory tf = TransformerFactory.newInstance();
         try {
             ClassPathResource xslResource = new ClassPathResource(xslPath);
             if (!xslResource.exists()) {
                 throw new PdfGenerationException("XSL template not found: " + xslPath);
             }
             try (InputStream is = xslResource.getInputStream()) {
-                Transformer transformer = transformerFactory.newTransformer(new StreamSource(is));
+                Transformer transformer = tf.newTransformer(new StreamSource(is));
                 return renderPdf(xmlData, transformer);
             }
         } catch (PdfGenerationException e) {

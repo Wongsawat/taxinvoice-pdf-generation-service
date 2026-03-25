@@ -18,6 +18,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestClientException;
 
 import java.util.Optional;
 
@@ -122,13 +123,23 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                             document.getId(), s3Key, fileUrl, pdfBytes.length, previousRetryCount, command);
 
                 } catch (CallNotPermittedException e) {
+                    // Circuit breaker is OPEN - upstream service is degraded
                     log.warn("Circuit breaker OPEN for saga {} taxInvoice {}: {}",
                             command.getSagaId(), taxInvoiceNum, e.getMessage());
                     pdfDocumentService.failGenerationAndPublish(
                             document.getId(), "Circuit breaker open: " + e.getMessage(),
                             previousRetryCount, command);
 
+                } catch (RestClientException e) {
+                    // HTTP 4xx/5xx from signed XML fetch - upstream service error
+                    log.warn("HTTP error fetching signed XML for saga {} taxInvoice {}: {}",
+                            command.getSagaId(), taxInvoiceNum, e.getMessage());
+                    pdfDocumentService.failGenerationAndPublish(
+                            document.getId(), "HTTP error fetching signed XML: " + describeThrowable(e),
+                            previousRetryCount, command);
+
                 } catch (Exception e) {
+                    // PDF generation failure or other unexpected error
                     if (s3Key != null) {
                         try { pdfStoragePort.delete(s3Key); }
                         catch (Exception del) {
@@ -136,7 +147,7 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                                     describeThrowable(del));
                         }
                     }
-                    log.error("PDF generation/upload failed for saga {} taxInvoice {}: {}",
+                    log.error("PDF generation failed for saga {} taxInvoice {}: {}",
                             command.getSagaId(), taxInvoiceNum, e.getMessage(), e);
                     pdfDocumentService.failGenerationAndPublish(
                             document.getId(), describeThrowable(e), previousRetryCount, command);

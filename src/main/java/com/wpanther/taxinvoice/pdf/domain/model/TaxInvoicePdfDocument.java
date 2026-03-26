@@ -1,6 +1,5 @@
 package com.wpanther.taxinvoice.pdf.domain.model;
 
-import com.wpanther.taxinvoice.pdf.domain.constants.PdfGenerationConstants;
 import com.wpanther.taxinvoice.pdf.domain.exception.TaxInvoicePdfGenerationException;
 import java.time.LocalDateTime;
 import java.util.Objects;
@@ -13,6 +12,11 @@ import java.util.UUID;
  * generation and XML embedding for tax invoices.
  */
 public class TaxInvoicePdfDocument {
+
+    /**
+     * Default MIME type for PDF documents.
+     */
+    private static final String DEFAULT_MIME_TYPE = "application/pdf";
 
     // Identity
     private final UUID id;
@@ -48,7 +52,7 @@ public class TaxInvoicePdfDocument {
         this.documentPath = builder.documentPath;
         this.documentUrl = builder.documentUrl;
         this.fileSize = builder.fileSize;
-        this.mimeType = builder.mimeType != null ? builder.mimeType : PdfGenerationConstants.PDF_MIME_TYPE;
+        this.mimeType = builder.mimeType != null ? builder.mimeType : DEFAULT_MIME_TYPE;
         this.xmlEmbedded = builder.xmlEmbedded;
         this.status = builder.status != null ? builder.status : GenerationStatus.PENDING;
         this.errorMessage = builder.errorMessage;

@@ -73,8 +73,15 @@ app:
       enabled: ${MINIO_CLEANUP_ENABLED:false}
       cron: ${MINIO_CLEANUP_CRON:0 0 2 * * ?}  # Daily at 2 AM
   pdf:
+    icc-profile-path: ${PDF_ICC_PROFILE_PATH:icc/sRGB.icc}
     generation:
+      # Number of retries allowed after the initial attempt (total attempts = max-retries + 1).
+      # Example: max-retries=3 → 1 initial attempt + 3 retries = 4 total attempts before the saga step fails.
       max-retries: ${PDF_GENERATION_MAX_RETRIES:3}
+      # Maximum concurrent FOP render jobs (each ~50-200 MB heap)
+      max-concurrent-renders: ${PDF_MAX_CONCURRENT_RENDERS:3}
+      # Maximum allowed PDF size in bytes (default: 50 MB)
+      max-pdf-size-bytes: ${PDF_MAX_SIZE_BYTES:52428800}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}

@@ -152,4 +152,56 @@ class FopTaxInvoicePdfGeneratorTest {
 
         assertThat(uri.isAbsolute()).isTrue();
     }
+
+    @Test
+    @DisplayName("Valid tax invoice XML → returns non-empty PDF bytes starting with %PDF")
+    void generatePdf_validXml_returnsPdfBytes() throws Exception {
+        FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
+        String xml = "<taxInvoice>"
+                + "<taxInvoiceNumber>TINV-TEST-001</taxInvoiceNumber>"
+                + "<seller><name>Test Seller</name><address>1 Test Rd</address>"
+                + "<taxId>1234567890123</taxId></seller>"
+                + "<buyer><name>Test Buyer</name><address>2 Test Rd</address>"
+                + "<taxId>9876543210987</taxId></buyer>"
+                + "<lineItems><item><description>Widget</description>"
+                + "<quantity>1</quantity><unit>EA</unit>"
+                + "<unitPrice>1000</unitPrice><amount>1000</amount></item></lineItems>"
+                + "<subtotal>1000</subtotal><amountBeforeVat>1000</amountBeforeVat>"
+                + "<vatRate>7</vatRate><vatAmount>70</vatAmount><grandTotal>1070</grandTotal>"
+                + "</taxInvoice>";
+
+        byte[] result = gen.generatePdf(xml);
+
+        assertThat(result).isNotEmpty();
+        // All PDF files start with the %PDF header
+        assertThat(new String(result, 0, 4, java.nio.charset.StandardCharsets.US_ASCII))
+                .isEqualTo("%PDF");
+    }
+
+    @Test
+    @DisplayName("Malformed XML → PdfGenerationException")
+    void generatePdf_malformedXml_throwsPdfGenerationException() {
+        FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
+        assertThatThrownBy(() -> gen.generatePdf("this is not xml <<<"))
+                .isInstanceOf(FopTaxInvoicePdfGenerator.PdfGenerationException.class);
+    }
+
+    @Test
+    @DisplayName("generatePdf() throws PdfGenerationException when PDF exceeds max size")
+    void generatePdf_pdfExceedsMaxSize_throwsPdfGenerationException() throws Exception {
+        // Set a 1-byte limit so any real PDF will exceed it
+        FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 1L, new SimpleMeterRegistry());
+        String xml = "<taxInvoice>"
+                + "<taxInvoiceNumber>TINV-TOOBIG</taxInvoiceNumber>"
+                + "<seller><name>S</name><address>A</address><taxId>123</taxId></seller>"
+                + "<buyer><name>B</name><address>A</address><taxId>987</taxId></buyer>"
+                + "<lineItems/>"
+                + "<subtotal>0</subtotal><amountBeforeVat>0</amountBeforeVat>"
+                + "<vatRate>7</vatRate><vatAmount>0</vatAmount><grandTotal>0</grandTotal>"
+                + "</taxInvoice>";
+
+        assertThatThrownBy(() -> gen.generatePdf(xml))
+                .isInstanceOf(FopTaxInvoicePdfGenerator.PdfGenerationException.class)
+                .hasMessageContaining("exceeds max allowed size");
+    }
 }

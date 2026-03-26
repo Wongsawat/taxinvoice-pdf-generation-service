@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.tracing.annotation.NewSpan;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.fop.apps.Fop;
 import org.apache.fop.apps.FopFactory;
@@ -168,6 +169,7 @@ public class FopTaxInvoicePdfGenerator {
      * @return PDF bytes
      * @throws PdfGenerationException if generation fails
      */
+    @NewSpan("pdf.fop.render")
     public byte[] generatePdf(String xmlData) throws PdfGenerationException {
         log.debug("Awaiting render permit (available={})", renderSemaphore.availablePermits());
         try {

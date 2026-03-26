@@ -168,6 +168,26 @@ class TaxInvoicePdfDocumentTest {
     }
 
     @Test
+    @DisplayName("incrementRetryCountTo() advances count to target")
+    void testIncrementRetryCountTo_AdvancesToTarget() {
+        TaxInvoicePdfDocument doc = pendingDocument();
+        doc.incrementRetryCountTo(2);
+        assertThat(doc.getRetryCount()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("incrementRetryCountTo() is a no-op when count already at target")
+    void testIncrementRetryCountTo_NoOpWhenAlreadyAtTarget() {
+        TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
+                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceNumber("TXINV-001")
+                .retryCount(2)
+                .build();
+        doc.incrementRetryCountTo(1);
+        assertThat(doc.getRetryCount()).isEqualTo(2);
+    }
+
+    @Test
     @DisplayName("isMaxRetriesExceeded() returns true when retryCount >= maxRetries")
     void testIsMaxRetriesExceeded_AtLimit() {
         TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()

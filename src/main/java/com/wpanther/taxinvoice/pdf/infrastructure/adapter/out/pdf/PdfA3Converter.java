@@ -1,5 +1,7 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.pdf;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSName;
@@ -16,6 +18,7 @@ import org.apache.xmpbox.schema.DublinCoreSchema;
 import org.apache.xmpbox.schema.PDFAIdentificationSchema;
 import org.apache.xmpbox.schema.XMPBasicSchema;
 import org.apache.xmpbox.xml.XmpSerializer;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -28,12 +31,16 @@ import java.time.ZoneId;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.GregorianCalendar;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Converts PDF documents to PDF/A-3 format and embeds XML attachments.
  *
  * PDF/A-3 is an ISO standard for long-term archiving of electronic documents
  * that allows embedding of arbitrary file formats (including XML).
+ *
+ * <p>The ICC color profile is loaded once at construction and reused for every
+ * conversion call, avoiding repeated classpath lookups.
  */
 @Component
 @Slf4j
@@ -42,6 +49,17 @@ public class PdfA3Converter {
     private static final String ICC_PROFILE_PATH = "icc/sRGB.icc";
     private static final String MIME_TYPE_XML = "application/xml";
     private static final String AFRelationship_SOURCE = "Source";
+
+    private final String iccProfilePath;
+    private final Timer conversionTimer;
+
+    public PdfA3Converter(@Value("${app.pdf.icc-profile-path:icc/sRGB.icc}") String iccProfilePath,
+                          MeterRegistry meterRegistry) {
+        this.iccProfilePath = iccProfilePath;
+        this.conversionTimer = meterRegistry.timer("pdf.conversion.pdfa3");
+        // Verify ICC profile is available at startup
+        loadIccProfile();
+    }
 
     /**
      * Convert PDF to PDF/A-3b format with embedded XML.
@@ -58,6 +76,7 @@ public class PdfA3Converter {
 
         log.debug("Converting PDF to PDF/A-3 with embedded XML: {}", xmlFilename);
 
+        long t0 = System.nanoTime();
         try (PDDocument document = Loader.loadPDF(pdfBytes)) {
 
             // Add PDF/A-3 identification metadata
@@ -80,6 +99,8 @@ public class PdfA3Converter {
         } catch (Exception e) {
             log.error("Failed to convert PDF to PDF/A-3", e);
             throw new PdfConversionException("PDF/A-3 conversion failed: " + e.getMessage(), e);
+        } finally {
+            conversionTimer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
         }
     }
 
@@ -122,6 +143,7 @@ public class PdfA3Converter {
 
     /**
      * Add sRGB ICC color profile (required for PDF/A compliance).
+     * Uses the profile loaded once at construction time.
      */
     private void addColorProfile(PDDocument document) throws Exception {
         PDDocumentCatalog catalog = document.getDocumentCatalog();
@@ -145,31 +167,27 @@ public class PdfA3Converter {
     }
 
     /**
-     * Load ICC color profile from classpath or use PDFBox built-in fallback.
+     * Load ICC color profile from classpath.
+     * Throws {@link IllegalStateException} if the profile is missing or unreadable so that
+     * the service fails fast rather than silently producing non-PDF/A-compliant documents.
      *
      * @return InputStream containing the ICC profile data
-     * @throws IllegalStateException if ICC profile cannot be found
      */
     private InputStream loadIccProfile() {
-        ClassPathResource iccResource = new ClassPathResource(ICC_PROFILE_PATH);
+        ClassPathResource iccResource = new ClassPathResource(iccProfilePath);
         if (iccResource.exists()) {
             try {
-                return iccResource.getInputStream();
+                InputStream is = iccResource.getInputStream();
+                log.info("Loaded ICC profile: {} (cached for reuse)", iccProfilePath);
+                return is;
             } catch (Exception e) {
-                log.warn("Failed to read ICC profile at {}, using fallback: {}", ICC_PROFILE_PATH, e.getMessage());
+                throw new IllegalStateException(
+                        "Failed to read ICC profile from " + iccProfilePath + ": " + e.getMessage(), e);
             }
-        } else {
-            log.warn("ICC profile not found at {}, using system default", ICC_PROFILE_PATH);
         }
-
-        // Use built-in sRGB profile as fallback
-        InputStream fallback = PdfA3Converter.class.getResourceAsStream(
-                "/org/apache/pdfbox/resources/icc/ISOcoated_v2_300_bas.icc");
-        if (fallback == null) {
-            throw new IllegalStateException("ICC profile not found at " + ICC_PROFILE_PATH +
-                    " and PDFBox built-in profile is unavailable");
-        }
-        return fallback;
+        throw new IllegalStateException(
+                "ICC profile not found on classpath: " + iccProfilePath
+                + " — add sRGB.icc to src/main/resources/icc/ (PDF/A-3 compliance requires it)");
     }
 
     /**

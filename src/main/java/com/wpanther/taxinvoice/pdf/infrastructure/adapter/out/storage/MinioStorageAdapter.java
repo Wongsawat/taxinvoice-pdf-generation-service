@@ -2,6 +2,8 @@ package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.storage;
 
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfStoragePort;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -13,6 +15,7 @@ import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.model.S3Object;
 
+import java.net.URI;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -29,26 +32,39 @@ public class MinioStorageAdapter implements PdfStoragePort {
     private final S3Client s3Client;
     private final String bucketName;
     private final String baseUrl;
+    private final Timer storeTimer;
+    private final Timer deleteTimer;
 
     public MinioStorageAdapter(
             S3Client s3Client,
             @Value("${app.minio.bucket-name}") String bucketName,
-            @Value("${app.minio.base-url}") String baseUrl) {
+            @Value("${app.minio.base-url}") String baseUrl,
+            MeterRegistry meterRegistry) {
+        try {
+            URI uri = URI.create(baseUrl);
+            if (uri.getScheme() == null || uri.getHost() == null) {
+                throw new IllegalArgumentException("not an absolute URL");
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("app.minio.base-url is not a valid absolute URL: " + baseUrl, e);
+        }
         this.s3Client = s3Client;
         this.bucketName = bucketName;
-        this.baseUrl = baseUrl;
+        this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+        this.storeTimer = meterRegistry.timer("pdf.minio.store", "bucket", bucketName);
+        this.deleteTimer = meterRegistry.timer("pdf.minio.delete", "bucket", bucketName);
     }
 
     @Override
     @CircuitBreaker(name = "minio")
     public String store(String taxInvoiceNumber, byte[] pdfBytes) {
-        return doStore(taxInvoiceNumber, pdfBytes);
+        return storeTimer.record(() -> doStore(taxInvoiceNumber, pdfBytes));
     }
 
     @Override
     @CircuitBreaker(name = "minio")
     public void delete(String s3Key) {
-        doDelete(s3Key);
+        deleteTimer.record(() -> doDelete(s3Key));
     }
 
     @Override

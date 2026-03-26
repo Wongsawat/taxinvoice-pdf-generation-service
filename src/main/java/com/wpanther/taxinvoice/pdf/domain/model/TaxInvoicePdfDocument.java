@@ -149,6 +149,23 @@ public class TaxInvoicePdfDocument {
     }
 
     /**
+     * Advance the retry count to {@code target} if it is not already there.
+     * Used by the application service when carrying forward the count from a
+     * previous failed attempt. This method ensures the retry count is monotonic -
+     * it will never decrease an existing higher value.
+     *
+     * @param target the target retry count (must be non-negative)
+     */
+    public void incrementRetryCountTo(int target) {
+        if (target < 0) {
+            throw new IllegalArgumentException("Target retry count cannot be negative");
+        }
+        if (this.retryCount < target) {
+            this.retryCount = target;
+        }
+    }
+
+    /**
      * Set retry count to a specific value.
      * Used when restoring retry state during document replacement.
      *

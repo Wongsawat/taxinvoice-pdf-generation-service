@@ -184,11 +184,14 @@ Flyway migrations create two tables:
 
 The service exposes Micrometer metrics for observability:
 
-| Metric | Type | Description |
-|--------|------|-------------|
-| `pdf.fop.render` | Timer | FOP PDF generation duration (seconds) |
-| `pdf.fop.size.bytes` | Distribution Summary | Size of generated PDFs in bytes |
-| `pdf.fop.render.available_permits` | Gauge | Available FOP concurrent render permits |
+| Metric | Type | Tags | Description |
+|--------|------|------|-------------|
+| `pdf.fop.render` | Timer | — | FOP PDF generation duration (seconds) |
+| `pdf.fop.size.bytes` | Distribution Summary | — | Size of generated PDFs in bytes |
+| `pdf.fop.render.available_permits` | Gauge | — | Available FOP concurrent render permits |
+| `pdf.conversion.pdfa3` | Timer | — | PDF/A-3 conversion duration (seconds) |
+| `pdf.minio.store` | Timer | `bucket` | MinIO upload duration (seconds) |
+| `pdf.minio.delete` | Timer | `bucket` | MinIO delete duration (seconds) |
 
 Access via `/actuator/metrics` and `/actuator/prometheus`.
 
@@ -219,14 +222,21 @@ Violations throw `TaxInvoicePdfGenerationException` with descriptive messages.
 
 ## Thai Fonts
 
-The service includes the **TH Sarabun New** font family:
+The service uses the **TH Sarabun New** font family (Thai government standard):
 
 - `THSarabunNew.ttf` (Regular)
 - `THSarabunNew Bold.ttf` (Bold)
 - `THSarabunNew Italic.ttf` (Italic)
 - `THSarabunNew BoldItalic.ttf` (Bold Italic)
 
-Fonts are validated at startup via the font health check. Add alternative fonts to `src/main/resources/fonts/` and update `src/main/resources/fop/fop.xconf` if needed.
+The XSL template (`src/main/resources/xsl/taxinvoice.xsl`) prioritizes THSarabunNew for proper Thai text rendering.
+
+Fonts are validated at startup via the font health check (enabled by default). The health check logs warnings if fonts are missing and fails startup when `FONT_HEALTH_CHECK_FAIL_ON_ERROR=true` (default).
+
+To add alternative fonts:
+1. Place TTF files in `src/main/resources/fonts/`
+2. Update `src/main/resources/fop/fop.xconf` to register the fonts
+3. Update `src/main/resources/xsl/taxinvoice.xsl` font-family stack if needed
 
 ## Concurrency Control
 
@@ -237,6 +247,31 @@ FOP PDF generation is throttled via a fair Semaphore to prevent OOM under load:
 - **Metrics**: `pdf.fop.render.available_permits` gauge shows available capacity
 
 Each FOP render job consumes approximately 50-200 MB of heap.
+
+## Testing
+
+The service has comprehensive test coverage (114 tests, 90%+ JaCoCo requirement):
+
+- **Unit Tests**: Domain model state machine, saga command handler, service methods
+- **Infrastructure Tests**: FOP generator, PDF/A-3 converter, MinIO storage adapter, REST client
+- **Integration Tests**: Repository with Testcontainers/PostgreSQL, Camel routes
+- **Messaging Tests**: Outbox publishers for saga replies and notification events
+
+```bash
+# Run all tests
+mvn test
+
+# Run with coverage verification
+mvn verify
+
+# Run specific test class
+mvn test -Dtest=FopTaxInvoicePdfGeneratorTest
+```
+
+Tests use a simplified FOP configuration (`src/test/resources/fop/fop.xconf`) that:
+- Disables strict validation for faster test execution
+- Omits PDF/A mode (production uses PDF/A-3b)
+- Uses auto-detected system fonts (no Thai font files required for tests)
 
 ## License
 

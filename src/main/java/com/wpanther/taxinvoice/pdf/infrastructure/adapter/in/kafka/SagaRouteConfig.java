@@ -90,7 +90,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         from("kafka:{{app.kafka.topics.saga-command-tax-invoice-pdf}}"
                         + "?brokers={{app.kafka.bootstrap-servers}}"
-                        + "&groupId={{app.kafka.consumer.group-id}}"
+                        + "&groupId={{app.kafka.consumer.command-group-id}}"
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError={{app.kafka.consumer.break-on-first-error:true}}"
@@ -112,7 +112,7 @@ public class SagaRouteConfig extends RouteBuilder {
         // ============================================================
         from("kafka:{{app.kafka.topics.saga-compensation-tax-invoice-pdf}}"
                         + "?brokers={{app.kafka.bootstrap-servers}}"
-                        + "&groupId={{app.kafka.consumer.group-id}}"
+                        + "&groupId={{app.kafka.consumer.compensation-group-id}}"
                         + "&autoOffsetReset=earliest"
                         + "&autoCommitEnable=false"
                         + "&breakOnFirstError={{app.kafka.consumer.break-on-first-error:true}}"

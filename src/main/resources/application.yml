@@ -82,6 +82,9 @@ app:
       max-concurrent-renders: ${PDF_MAX_CONCURRENT_RENDERS:3}
       # Maximum allowed PDF size in bytes (default: 50 MB)
       max-pdf-size-bytes: ${PDF_MAX_SIZE_BYTES:52428800}
+  taxinvoice:
+    default-vat-rate: ${TAXINVOICE_DEFAULT_VAT_RATE:7}
+    max-json-size-bytes: ${TAXINVOICE_MAX_JSON_SIZE_BYTES:1048576}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}

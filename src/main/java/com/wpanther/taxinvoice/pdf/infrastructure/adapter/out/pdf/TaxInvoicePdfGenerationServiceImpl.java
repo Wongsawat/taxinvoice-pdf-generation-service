@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
 import com.wpanther.taxinvoice.pdf.domain.exception.TaxInvoicePdfGenerationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.xml.parsers.SAXParserFactory;
@@ -31,6 +32,7 @@ public class TaxInvoicePdfGenerationServiceImpl implements TaxInvoicePdfGenerati
     private final FopTaxInvoicePdfGenerator fopPdfGenerator;
     private final PdfA3Converter pdfA3Converter;
     private final ObjectMapper objectMapper;
+    private final int maxJsonSizeBytes;
 
     // ThreadLocal avoids any implementation-specific contention in XMLOutputFactory while still
     // caching the factory per thread to avoid a ServiceLoader SPI scan on every PDF generation.
@@ -46,10 +48,12 @@ public class TaxInvoicePdfGenerationServiceImpl implements TaxInvoicePdfGenerati
 
     public TaxInvoicePdfGenerationServiceImpl(FopTaxInvoicePdfGenerator fopPdfGenerator,
                                                PdfA3Converter pdfA3Converter,
-                                               ObjectMapper objectMapper) {
+                                               ObjectMapper objectMapper,
+                                               @Value("${app.taxinvoice.max-json-size-bytes:1048576}") int maxJsonSizeBytes) {
         this.fopPdfGenerator = fopPdfGenerator;
         this.pdfA3Converter = pdfA3Converter;
         this.objectMapper = objectMapper;
+        this.maxJsonSizeBytes = maxJsonSizeBytes;
     }
 
     @Override
@@ -57,6 +61,20 @@ public class TaxInvoicePdfGenerationServiceImpl implements TaxInvoicePdfGenerati
             throws TaxInvoicePdfGenerationException {
 
         log.info("Starting PDF generation for tax invoice: {}", taxInvoiceNumber);
+
+        if (xmlContent == null || xmlContent.isBlank()) {
+            throw new TaxInvoicePdfGenerationException(
+                    "xmlContent (signed XML) is null or blank for tax invoice: " + taxInvoiceNumber);
+        }
+        if (taxInvoiceDataJson == null) {
+            throw new TaxInvoicePdfGenerationException(
+                    "taxInvoiceDataJson is null for tax invoice: " + taxInvoiceNumber);
+        }
+        if (taxInvoiceDataJson.length() > maxJsonSizeBytes) {
+            throw new TaxInvoicePdfGenerationException(
+                    "taxInvoiceDataJson exceeds max allowed size for tax invoice " + taxInvoiceNumber
+                    + ": " + taxInvoiceDataJson.length() + " chars > " + maxJsonSizeBytes);
+        }
 
         try {
             // Step 1: Convert tax invoice JSON to XML for FOP processing

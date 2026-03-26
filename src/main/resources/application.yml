@@ -22,7 +22,6 @@ spring:
 
   flyway:
     enabled: true
-    baseline-on-migrate: true
     locations: classpath:db/migration
 
   jackson:
@@ -37,17 +36,9 @@ camel:
   dataformat:
     jackson:
       auto-discover-object-mapper: true
-  component:
-    kafka:
-      brokers: ${KAFKA_BROKERS:localhost:9092}
 
 # Application-specific configuration
 app:
-  # Font health check - validates Thai fonts at startup (enabled by default)
-  fonts:
-    health-check:
-      enabled: ${FONT_HEALTH_CHECK_ENABLED:true}
-      fail-on-error: ${FONT_HEALTH_CHECK_FAIL_ON_ERROR:true}
   kafka:
     bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
     consumer:
@@ -88,21 +79,27 @@ app:
     max-json-size-bytes: ${TAXINVOICE_MAX_JSON_SIZE_BYTES:1048576}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
-    read-timeout: ${REST_CLIENT_READ_TIMEOUT:30000}
+    read-timeout: ${REST_CLIENT_READ_TIMEOUT:10000}  # Increase to 30000+ ms in production for large signed XML
+    allowed-hosts: ${REST_CLIENT_ALLOWED_HOSTS:localhost}
+  # Font health check - validates Thai fonts at startup (enabled by default)
+  fonts:
+    health-check:
+      enabled: ${FONT_HEALTH_CHECK_ENABLED:true}
+      fail-on-error: ${FONT_HEALTH_CHECK_FAIL_ON_ERROR:true}
 
 # Resilience4j Circuit Breaker
 resilience4j:
   circuitbreaker:
     instances:
+      # MinIO S3 storage circuit breaker
       minio:
         sliding-window-size: 10
         failure-rate-threshold: 50
-        wait-duration-in-open-state: 60s
+        wait-duration-in-open-state: 30s
         permitted-number-of-calls-in-half-open-state: 3
-        slow-call-rate-threshold: 50
-        slow-call-duration-threshold: 3s
-        register-health-indicator: true
         automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+      # Signed XML fetch circuit breaker (document-storage-service)
       signedXmlFetch:
         sliding-window-size: 10
         failure-rate-threshold: 50
@@ -110,8 +107,6 @@ resilience4j:
         permitted-number-of-calls-in-half-open-state: 3
         slow-call-rate-threshold: 50
         slow-call-duration-threshold: 3s
-        register-health-indicator: true
-        automatic-transition-from-open-to-half-open-enabled: true
 
 # Eureka client configuration
 eureka:
@@ -132,16 +127,22 @@ management:
         include: health,info,metrics,prometheus,camelroutes
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
   metrics:
     tags:
       application: ${spring.application.name}
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
 # Logging
 logging:
   level:
     root: INFO
-    com.wpanther.taxinvoice.pdf: DEBUG
+    com.wpanther.taxinvoice.pdf: INFO
     org.apache.camel: INFO
     org.apache.camel.component.kafka: DEBUG
     org.apache.fop: INFO

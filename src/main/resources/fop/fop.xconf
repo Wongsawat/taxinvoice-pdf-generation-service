@@ -21,15 +21,8 @@
             <version>1.4</version>
 
             <!-- Enable PDF/A mode preparation -->
+            <!-- NOTE: PDF/A-3b prohibits encryption — do NOT add encryption-params here -->
             <pdf-a-mode>PDF/A-3b</pdf-a-mode>
-
-            <!-- Disable encryption for PDF/A compliance -->
-            <encryption-params>
-                <noprint/>
-                <nocopy/>
-                <noedit/>
-                <noannotations/>
-            </encryption-params>
 
             <!-- Filter configuration -->
             <filterList>
@@ -48,29 +41,32 @@
                 <!-- Windows fonts (if running on Windows) -->
                 <directory recursive="true">C:\Windows\Fonts</directory>
 
-                <!-- Custom fonts directory in application -->
-                <directory recursive="true">fonts</directory>
+                <!-- Custom fonts directory in application.
+                     Paths are relative to this file's directory (classpath:fop/).
+                     "../fonts" resolves to classpath:fonts/, which is where the
+                     font TTF files are packaged in the JAR. -->
+                <directory recursive="true">../fonts</directory>
 
                 <!-- Thai font configuration -->
                 <!-- THSarabunNew - commonly used Thai font -->
-                <font kerning="yes" embed-url="fonts/THSarabunNew.ttf">
+                <font kerning="yes" embed-url="../fonts/THSarabunNew.ttf">
                     <font-triplet name="THSarabunNew" style="normal" weight="normal"/>
                 </font>
-                <font kerning="yes" embed-url="fonts/THSarabunNew-Bold.ttf">
+                <font kerning="yes" embed-url="../fonts/THSarabunNew-Bold.ttf">
                     <font-triplet name="THSarabunNew" style="normal" weight="bold"/>
                 </font>
-                <font kerning="yes" embed-url="fonts/THSarabunNew-Italic.ttf">
+                <font kerning="yes" embed-url="../fonts/THSarabunNew-Italic.ttf">
                     <font-triplet name="THSarabunNew" style="italic" weight="normal"/>
                 </font>
-                <font kerning="yes" embed-url="fonts/THSarabunNew-BoldItalic.ttf">
+                <font kerning="yes" embed-url="../fonts/THSarabunNew-BoldItalic.ttf">
                     <font-triplet name="THSarabunNew" style="italic" weight="bold"/>
                 </font>
 
                 <!-- Noto Sans Thai Looped - Google font with Thai support (looped/traditional style) -->
-                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Regular.ttf">
+                <font kerning="yes" embed-url="../fonts/NotoSansThaiLooped-Regular.ttf">
                     <font-triplet name="NotoSansThai" style="normal" weight="normal"/>
                 </font>
-                <font kerning="yes" embed-url="fonts/NotoSansThaiLooped-Bold.ttf">
+                <font kerning="yes" embed-url="../fonts/NotoSansThaiLooped-Bold.ttf">
                     <font-triplet name="NotoSansThai" style="normal" weight="bold"/>
                 </font>
             </fonts>

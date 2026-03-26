@@ -135,6 +135,19 @@ public class TaxInvoicePdfGenerationServiceImpl implements TaxInvoicePdfGenerati
         try {
             JsonNode root = objectMapper.readTree(taxInvoiceDataJson);
 
+            // Validate that the two required party fields are present.
+            // Without them the generated PDF contains no business-identifying information.
+            JsonNode sellerNode = root.path("seller");
+            if (sellerNode.isMissingNode() || sellerNode.isNull()) {
+                throw new TaxInvoicePdfGenerationException(
+                        "taxInvoiceDataJson is missing required field 'seller' for tax invoice: " + taxInvoiceNumber);
+            }
+            JsonNode buyerNode = root.path("buyer");
+            if (buyerNode.isMissingNode() || buyerNode.isNull()) {
+                throw new TaxInvoicePdfGenerationException(
+                        "taxInvoiceDataJson is missing required field 'buyer' for tax invoice: " + taxInvoiceNumber);
+            }
+
             writer.writeStartDocument("UTF-8", "1.0");
             writer.writeStartElement("taxInvoice");
 

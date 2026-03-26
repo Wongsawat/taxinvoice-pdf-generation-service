@@ -89,7 +89,12 @@ class TaxInvoicePdfGenerationServiceImplTest {
 
     private static final String TAX_INVOICE_NUMBER = "TXINV-2024-001";
     private static final String XML_CONTENT = "<TaxInvoice>signed</TaxInvoice>";
-    private static final String MINIMAL_JSON = "{}";
+    private static final String MINIMAL_JSON = """
+            {
+              "seller": { "name": "Seller Co.", "taxId": "1234567890" },
+              "buyer":  { "name": "Buyer Co.",  "taxId": "0987654321" }
+            }
+            """;
     private static final String FULL_JSON = """
             {
               "taxInvoiceNumber": "TXINV-2024-001",
@@ -122,14 +127,14 @@ class TaxInvoicePdfGenerationServiceImplTest {
     }
 
     @Test
-    @DisplayName("generatePdf() with minimal valid JSON ({}) still produces XML")
+    @DisplayName("generatePdf() with minimal valid JSON (seller + buyer) still produces XML")
     void testGeneratePdf_MinimalJson() throws Exception {
         byte[] basePdf = new byte[500];
         when(fopPdfGenerator.generatePdf(anyString())).thenReturn(basePdf);
         when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any()))
                 .thenReturn(new byte[600]);
 
-        // "{}" is valid JSON with no fields; all values default — should succeed
+        // Minimal valid JSON with required seller + buyer fields — should succeed
         service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, MINIMAL_JSON);
 
         ArgumentCaptor<String> xmlCaptor = ArgumentCaptor.forClass(String.class);
@@ -204,7 +209,8 @@ class TaxInvoicePdfGenerationServiceImplTest {
         String jsonWithSpecialChars = """
                 {
                   "taxInvoiceNumber": "TXINV&001",
-                  "seller": { "name": "A & B <Corp>" }
+                  "seller": { "name": "A & B <Corp>", "taxId": "1234567890" },
+                  "buyer":  { "name": "Buyer Co.", "taxId": "0987654321" }
                 }
                 """;
 
@@ -220,5 +226,87 @@ class TaxInvoicePdfGenerationServiceImplTest {
                 .doesNotContain("A & B")
                 .contains("&amp;")
                 .contains("&lt;");
+    }
+
+    @Test
+    @DisplayName("generatePdf() throws when seller field is missing from JSON")
+    void testGeneratePdf_MissingSellerField_Throws() {
+        // JSON without seller field - should fail fast before FOP processing
+        String jsonWithoutSeller = """
+                {
+                  "taxInvoiceNumber": "TXINV-001",
+                  "buyer": { "name": "Buyer Co.", "taxId": "0987654321" }
+                }
+                """;
+
+        assertThatThrownBy(() ->
+                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithoutSeller))
+                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
+                .hasMessageContaining("missing required field 'seller'");
+
+        verifyNoInteractions(fopPdfGenerator);
+        verifyNoInteractions(pdfA3Converter);
+    }
+
+    @Test
+    @DisplayName("generatePdf() throws when seller field is null in JSON")
+    void testGeneratePdf_NullSellerField_Throws() {
+        // JSON with null seller field - should fail fast before FOP processing
+        String jsonWithNullSeller = """
+                {
+                  "taxInvoiceNumber": "TXINV-001",
+                  "seller": null,
+                  "buyer": { "name": "Buyer Co.", "taxId": "0987654321" }
+                }
+                """;
+
+        assertThatThrownBy(() ->
+                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithNullSeller))
+                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
+                .hasMessageContaining("missing required field 'seller'");
+
+        verifyNoInteractions(fopPdfGenerator);
+        verifyNoInteractions(pdfA3Converter);
+    }
+
+    @Test
+    @DisplayName("generatePdf() throws when buyer field is missing from JSON")
+    void testGeneratePdf_MissingBuyerField_Throws() {
+        // JSON without buyer field - should fail fast before FOP processing
+        String jsonWithoutBuyer = """
+                {
+                  "taxInvoiceNumber": "TXINV-001",
+                  "seller": { "name": "Seller Co.", "taxId": "1234567890" }
+                }
+                """;
+
+        assertThatThrownBy(() ->
+                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithoutBuyer))
+                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
+                .hasMessageContaining("missing required field 'buyer'");
+
+        verifyNoInteractions(fopPdfGenerator);
+        verifyNoInteractions(pdfA3Converter);
+    }
+
+    @Test
+    @DisplayName("generatePdf() throws when buyer field is null in JSON")
+    void testGeneratePdf_NullBuyerField_Throws() {
+        // JSON with null buyer field - should fail fast before FOP processing
+        String jsonWithNullBuyer = """
+                {
+                  "taxInvoiceNumber": "TXINV-001",
+                  "seller": { "name": "Seller Co.", "taxId": "1234567890" },
+                  "buyer": null
+                }
+                """;
+
+        assertThatThrownBy(() ->
+                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithNullBuyer))
+                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
+                .hasMessageContaining("missing required field 'buyer'");
+
+        verifyNoInteractions(fopPdfGenerator);
+        verifyNoInteractions(pdfA3Converter);
     }
 }

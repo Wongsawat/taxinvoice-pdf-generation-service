@@ -21,6 +21,8 @@ A Spring Boot microservice that generates PDF/A-3 documents from signed Thai e-T
 - **Retry Tracking**: Configurable max retries with per-document retry counting
 - **State Management**: DDD aggregate with state machine (PENDING → GENERATING → COMPLETED/FAILED)
 - **Persistence**: PostgreSQL with Flyway migrations
+- **Orphaned PDF Cleanup**: Scheduled job removes PDFs from MinIO that lack corresponding database records (service crash recovery)
+- **Font Validation**: Startup health check verifies Thai fonts are present, preventing runtime failures
 
 ## Tech Stack
 
@@ -62,7 +64,7 @@ export MINIO_SECRET_KEY=minioadmin
 export MINIO_BUCKET_NAME=taxinvoices
 mvn spring-boot:run
 
-# Run tests
+# Run tests (use clean test to avoid stale compilation issues)
 mvn clean test
 
 # Run with coverage verification (90% JaCoCo requirement)
@@ -122,8 +124,14 @@ mvn flyway:migrate
 ### Font Health Check
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `FONT_HEALTH_CHECK_ENABLED` | true | Enable Thai font validation at startup |
-| `FONT_HEALTH_CHECK_FAIL_ON_ERROR` | true | Fail startup if fonts missing (warn if false) |
+| `app.fonts.health-check.enabled` | true | Enable Thai font validation at startup |
+| `app.fonts.health-check.fail-on-error` | true | Fail startup if fonts missing (warn if false) |
+
+### MinIO Cleanup
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `app.minio.cleanup.enabled` | false | Enable orphaned PDF cleanup job |
+| `app.minio.cleanup.cron` | `0 0 2 * * ?` | Cron schedule (daily at 2 AM) |
 
 ## Kafka Topics
 
@@ -167,11 +175,21 @@ application/         # Use case orchestration
     └── TaxInvoicePdfDocumentService # PDF generation, MinIO S3 storage
 
 infrastructure/      # Framework implementations
-├── config/          # Camel routes, MinIO S3Client config, outbox config
-├── messaging/       # EventPublisher, SagaReplyPublisher (outbox-based)
+├── config/          # Camel routes, MinIO S3Client config, outbox config, font health check
+├── messaging/       # EventPublisher, SagaReplyPublisher (outbox-based), Kafka command mapper
 ├── persistence/     # JPA entities, repositories, outbox entities
+├── storage/         # MinIO S3 adapter, orphaned PDF cleanup service
 └── pdf/             # FOP generator, PDF/A-3 converter, XML validation
 ```
+
+## Orphaned PDF Cleanup
+
+The service includes a scheduled cleanup job to handle PDFs uploaded to MinIO but never committed to the database (e.g., service crash between upload and DB commit):
+
+- **Schedule**: Daily at 2 AM (configurable via `app.minio.cleanup.cron`)
+- **Process**: Lists all MinIO objects, compares against database `document_path` values, deletes orphans
+- **Enable**: Set `app.minio.cleanup.enabled=true` (disabled by default)
+- **Circuit Breaker**: Uses direct S3Client calls (bypasses circuit breaker) for deletion
 
 ## Database
 
@@ -222,16 +240,19 @@ Violations throw `TaxInvoicePdfGenerationException` with descriptive messages.
 
 ## Thai Fonts
 
-The service uses the **TH Sarabun New** font family (Thai government standard):
+The service uses two Thai font families for proper text rendering:
 
+**TH Sarabun New** (Thai government standard):
 - `THSarabunNew.ttf` (Regular)
 - `THSarabunNew Bold.ttf` (Bold)
 - `THSarabunNew Italic.ttf` (Italic)
 - `THSarabunNew BoldItalic.ttf` (Bold Italic)
 
-The XSL template (`src/main/resources/xsl/taxinvoice.xsl`) prioritizes THSarabunNew for proper Thai text rendering.
+**Noto Sans Thai Looped** (fallback alternative):
+- `NotoSansThaiLooped-Regular.ttf` (Regular)
+- `NotoSansThaiLooped-Bold.ttf` (Bold)
 
-Fonts are validated at startup via the font health check (enabled by default). The health check logs warnings if fonts are missing and fails startup when `FONT_HEALTH_CHECK_FAIL_ON_ERROR=true` (default).
+Fonts are included in `src/main/resources/fonts/` and validated at startup via the font health check. The XSL template (`src/main/resources/xsl/taxinvoice.xsl`) prioritizes THSarabunNew for proper Thai text rendering.
 
 To add alternative fonts:
 1. Place TTF files in `src/main/resources/fonts/`
@@ -250,16 +271,16 @@ Each FOP render job consumes approximately 50-200 MB of heap.
 
 ## Testing
 
-The service has comprehensive test coverage (114 tests, 90%+ JaCoCo requirement):
+The service has comprehensive test coverage (115 tests, 90%+ JaCoCo requirement):
 
-- **Unit Tests**: Domain model state machine, saga command handler, service methods
-- **Infrastructure Tests**: FOP generator, PDF/A-3 converter, MinIO storage adapter, REST client
+- **Unit Tests**: Domain model state machine, saga command handler, service methods, constants, exceptions
+- **Infrastructure Tests**: FOP generator, PDF/A-3 converter, MinIO storage adapter, MinIO cleanup service, font health check, REST client
 - **Integration Tests**: Repository with Testcontainers/PostgreSQL, Camel routes
-- **Messaging Tests**: Outbox publishers for saga replies and notification events
+- **Messaging Tests**: Outbox publishers for saga replies and notification events, Kafka command mapper
 
 ```bash
-# Run all tests
-mvn test
+# Run all tests (use clean test to avoid stale compilation issues)
+mvn clean test
 
 # Run with coverage verification
 mvn verify

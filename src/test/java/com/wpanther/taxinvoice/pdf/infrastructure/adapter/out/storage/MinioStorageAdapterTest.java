@@ -1,5 +1,7 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.storage;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,11 +24,12 @@ class MinioStorageAdapterTest {
     @Mock
     private S3Client s3Client;
 
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
     private MinioStorageAdapter adapter;
 
     @BeforeEach
     void setUp() {
-        adapter = new MinioStorageAdapter(s3Client, "test-bucket", "http://localhost:9000/test-bucket");
+        adapter = new MinioStorageAdapter(s3Client, "test-bucket", "http://localhost:9000/test-bucket", meterRegistry);
     }
 
     @Test

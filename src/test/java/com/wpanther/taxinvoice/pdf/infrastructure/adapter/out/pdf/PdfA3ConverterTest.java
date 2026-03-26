@@ -1,5 +1,7 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.pdf;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -15,17 +17,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DisplayName("PdfA3Converter Unit Tests")
 class PdfA3ConverterTest {
 
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
+
     @Test
     @DisplayName("Constructor creates converter instance")
     void constructor_createsInstance() {
-        PdfA3Converter converter = new PdfA3Converter();
+        PdfA3Converter converter = new PdfA3Converter("icc/sRGB.icc", meterRegistry);
         assertThat(converter).isNotNull();
     }
 
     @Test
     @DisplayName("convertToPdfA3() throws PdfConversionException for null input")
     void testConvertToPdfA3_NullInput_Throws() {
-        PdfA3Converter converter = new PdfA3Converter();
+        PdfA3Converter converter = new PdfA3Converter("icc/sRGB.icc", meterRegistry);
 
         assertThatThrownBy(() ->
                 converter.convertToPdfA3(null, "<xml/>", "test.xml", "TXINV-001"))
@@ -35,7 +39,7 @@ class PdfA3ConverterTest {
     @Test
     @DisplayName("convertToPdfA3() throws PdfConversionException for empty PDF bytes")
     void testConvertToPdfA3_EmptyPdf_Throws() {
-        PdfA3Converter converter = new PdfA3Converter();
+        PdfA3Converter converter = new PdfA3Converter("icc/sRGB.icc", meterRegistry);
 
         assertThatThrownBy(() ->
                 converter.convertToPdfA3(new byte[0], "<xml/>", "test.xml", "TXINV-001"))

@@ -39,15 +39,14 @@ class EventPublisherTest {
     void testPublishPdfGenerated() {
         // Given
         String documentId = "doc-123";
-        String taxInvoiceId = "tax-inv-001";
-        String taxInvoiceNumber = "TXINV-2024-001";
+        String documentNumber = "TXINV-2024-001";
         String documentUrl = "http://localhost:9000/taxinvoices/test.pdf";
         long fileSize = 12345L;
         boolean xmlEmbedded = true;
         String correlationId = "corr-456";
 
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
-                "saga-001", documentId, taxInvoiceId, taxInvoiceNumber, documentUrl, fileSize, xmlEmbedded, correlationId);
+                "saga-001", documentId, documentNumber, documentUrl, fileSize, xmlEmbedded, correlationId);
 
         // When
         eventPublisher.publishPdfGenerated(event);
@@ -56,9 +55,9 @@ class EventPublisherTest {
         verify(outboxService).saveWithRouting(
                 eq(event),
                 eq("TaxInvoicePdfDocument"),
-                eq(taxInvoiceId),
+                eq(documentId),
                 eq("pdf.generated.tax-invoice"),
-                eq(taxInvoiceId),
+                eq(documentId),
                 anyString() // headers JSON
         );
     }
@@ -68,7 +67,7 @@ class EventPublisherTest {
     void testPublishPdfGenerated_Headers() {
         // Given
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
-                "saga-001", "doc-123", "tax-inv-001", "TXINV-001",
+                "saga-001", "doc-123", "TXINV-001",
                 "http://localhost:9000/taxinvoices/test.pdf", 12345L, true, "corr-456");
 
         // When
@@ -96,7 +95,7 @@ class EventPublisherTest {
         // When
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
                 sagaId,
-                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "doc-123", "TXINV-2024-001",
                 "http://localhost:9000/taxinvoices/test.pdf", 12345L, true,
                 correlationId);
 

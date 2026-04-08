@@ -15,8 +15,6 @@ public class KafkaTaxInvoiceCompensateCommand extends SagaCommand {
 
     @Getter
     @JsonProperty("documentId")   private final String documentId;
-    @Getter
-    @JsonProperty("taxInvoiceId") private final String taxInvoiceId;
 
     @JsonCreator
     public KafkaTaxInvoiceCompensateCommand(
@@ -27,19 +25,16 @@ public class KafkaTaxInvoiceCompensateCommand extends SagaCommand {
             @JsonProperty("sagaId") String sagaId,
             @JsonProperty("sagaStep") SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
-            @JsonProperty("documentId") String documentId,
-            @JsonProperty("taxInvoiceId") String taxInvoiceId) {
+            @JsonProperty("documentId") String documentId) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.taxInvoiceId = taxInvoiceId;
     }
 
     /** Convenience constructor for testing. */
     public KafkaTaxInvoiceCompensateCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                            String documentId, String taxInvoiceId) {
+                                            String documentId) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.taxInvoiceId = taxInvoiceId;
     }
 
     // Explicit getters for parent class fields (SagaCommand doesn't use @Getter)
@@ -58,12 +53,8 @@ public class KafkaTaxInvoiceCompensateCommand extends SagaCommand {
         return super.getCorrelationId();
     }
 
-    // Explicit getters (Lombok @Getter might not be processed)
+    // Explicit getter for documentId (Lombok @Getter might not be processed)
     public String getDocumentId() {
         return documentId;
-    }
-
-    public String getTaxInvoiceId() {
-        return taxInvoiceId;
     }
 }

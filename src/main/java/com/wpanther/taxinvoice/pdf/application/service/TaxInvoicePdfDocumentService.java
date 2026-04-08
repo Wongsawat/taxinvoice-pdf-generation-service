@@ -129,13 +129,13 @@ public class TaxInvoicePdfDocumentService {
     public void publishRetryExhausted(KafkaTaxInvoiceProcessCommand command) {
         pdfGenerationMetrics.recordRetryExhausted(
                 command.getSagaId(),
-                command.getTaxInvoiceId(),
-                command.getTaxInvoiceNumber());
+                command.getDocumentId(),
+                command.getDocumentNumber());
         sagaReplyPort.publishFailure(
                 command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
                 "Maximum retry attempts exceeded");
-        log.error("Max retries exceeded for saga {} tax invoice {}",
-                command.getSagaId(), command.getTaxInvoiceNumber());
+        log.error("Max retries exceeded for saga {} document {}",
+                command.getSagaId(), command.getDocumentNumber());
     }
 
     @Transactional
@@ -182,7 +182,6 @@ public class TaxInvoicePdfDocumentService {
         return new TaxInvoicePdfGeneratedEvent(
                 command.getSagaId(),
                 command.getDocumentId(),
-                doc.getTaxInvoiceId(),
                 doc.getTaxInvoiceNumber(),
                 doc.getDocumentUrl(),
                 doc.getFileSize(),

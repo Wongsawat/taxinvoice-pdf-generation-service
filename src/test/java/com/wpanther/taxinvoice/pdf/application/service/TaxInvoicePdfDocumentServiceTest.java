@@ -129,7 +129,7 @@ class TaxInvoicePdfDocumentServiceTest {
         TaxInvoicePdfDocument doc = createCompletedDocument();
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tax-inv-001", "TXINV-001",
+                "doc-1", "TXINV-001",
                 "http://minio:9000/signed.xml", "{}");
 
         // When
@@ -148,7 +148,7 @@ class TaxInvoicePdfDocumentServiceTest {
         // Given
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tax-inv-001", "TXINV-001",
+                "doc-1", "TXINV-001",
                 "http://minio:9000/signed.xml", "{}");
 
         // When
@@ -166,7 +166,7 @@ class TaxInvoicePdfDocumentServiceTest {
         // Given
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tax-inv-001", "TXINV-001",
+                "doc-1", "TXINV-001",
                 "http://minio:9000/signed.xml", "{}");
         String errorMessage = "Invalid XML format";
 
@@ -185,7 +185,7 @@ class TaxInvoicePdfDocumentServiceTest {
         // Given
         KafkaTaxInvoiceCompensateCommand command = new KafkaTaxInvoiceCompensateCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tax-inv-001");
+                "doc-1");
 
         // When
         var service = getService();
@@ -201,7 +201,7 @@ class TaxInvoicePdfDocumentServiceTest {
         // Given
         KafkaTaxInvoiceCompensateCommand command = new KafkaTaxInvoiceCompensateCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tax-inv-001");
+                "doc-1");
         String error = "Failed to delete PDF file";
 
         // When
@@ -241,7 +241,7 @@ class TaxInvoicePdfDocumentServiceTest {
 
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tax-inv-001", "TXINV-001",
+                "doc-1", "TXINV-001",
                 "http://minio:9000/signed.xml", "{}");
 
         // When
@@ -287,7 +287,7 @@ class TaxInvoicePdfDocumentServiceTest {
 
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tax-inv-001", "TXINV-001",
+                "doc-1", "TXINV-001",
                 "http://minio:9000/signed.xml", "{}");
         String errorMessage = "PDF generation failed";
 

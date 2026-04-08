@@ -22,11 +22,8 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
     @JsonProperty("documentId")
     private final String documentId;
 
-    @JsonProperty("taxInvoiceId")
-    private final String taxInvoiceId;
-
-    @JsonProperty("taxInvoiceNumber")
-    private final String taxInvoiceNumber;
+    @JsonProperty("documentNumber")
+    private final String documentNumber;
 
     @JsonProperty("documentUrl")
     private final String documentUrl;
@@ -45,8 +42,7 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
     public TaxInvoicePdfGeneratedEvent(
             String sagaId,
             String documentId,
-            String taxInvoiceId,
-            String taxInvoiceNumber,
+            String documentNumber,
             String documentUrl,
             long fileSize,
             boolean xmlEmbedded,
@@ -54,8 +50,7 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
     ) {
         super(sagaId, correlationId, SOURCE, TRACE_TYPE, null);
         this.documentId = documentId;
-        this.taxInvoiceId = taxInvoiceId;
-        this.taxInvoiceNumber = taxInvoiceNumber;
+        this.documentNumber = documentNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;
@@ -78,16 +73,14 @@ public class TaxInvoicePdfGeneratedEvent extends TraceEvent {
             @JsonProperty("traceType") String traceType,
             @JsonProperty("context") String context,
             @JsonProperty("documentId") String documentId,
-            @JsonProperty("taxInvoiceId") String taxInvoiceId,
-            @JsonProperty("taxInvoiceNumber") String taxInvoiceNumber,
+            @JsonProperty("documentNumber") String documentNumber,
             @JsonProperty("documentUrl") String documentUrl,
             @JsonProperty("fileSize") long fileSize,
             @JsonProperty("xmlEmbedded") boolean xmlEmbedded
     ) {
         super(eventId, occurredAt, eventType, version, sagaId, correlationId, source, traceType, context);
         this.documentId = documentId;
-        this.taxInvoiceId = taxInvoiceId;
-        this.taxInvoiceNumber = taxInvoiceNumber;
+        this.documentNumber = documentNumber;
         this.documentUrl = documentUrl;
         this.fileSize = fileSize;
         this.xmlEmbedded = xmlEmbedded;

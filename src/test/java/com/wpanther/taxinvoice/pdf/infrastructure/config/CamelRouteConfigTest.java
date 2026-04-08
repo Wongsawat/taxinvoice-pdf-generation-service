@@ -51,7 +51,7 @@ class CamelRouteConfigTest {
         // Given
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "doc-123", "TXINV-2024-001",
                 "<TaxInvoice>...</TaxInvoice>", "{}"
         );
 
@@ -64,8 +64,7 @@ class CamelRouteConfigTest {
         assertThat(deserialized.getSagaStep()).isEqualTo(SagaStep.GENERATE_TAX_INVOICE_PDF);
         assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
-        assertThat(deserialized.getTaxInvoiceId()).isEqualTo("tax-inv-001");
-        assertThat(deserialized.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
+        assertThat(deserialized.getDocumentNumber()).isEqualTo("TXINV-2024-001");
         assertThat(deserialized.getSignedXmlUrl()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
         assertThat(deserialized.getTaxInvoiceDataJson()).isEqualTo("{}");
         assertThat(deserialized.getEventId()).isNotNull();
@@ -77,7 +76,7 @@ class CamelRouteConfigTest {
         // Given
         KafkaTaxInvoiceCompensateCommand command = new KafkaTaxInvoiceCompensateCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123", "tax-inv-001"
+                "doc-123"
         );
 
         // When
@@ -89,7 +88,6 @@ class CamelRouteConfigTest {
         assertThat(deserialized.getSagaStep()).isEqualTo(SagaStep.GENERATE_TAX_INVOICE_PDF);
         assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
-        assertThat(deserialized.getTaxInvoiceId()).isEqualTo("tax-inv-001");
     }
 
     @Test
@@ -97,7 +95,7 @@ class CamelRouteConfigTest {
     void testTaxInvoicePdfGeneratedEventSerialization() throws Exception {
         // Given
         TaxInvoicePdfGeneratedEvent event = new TaxInvoicePdfGeneratedEvent(
-                "saga-001", "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "saga-001", "doc-123", "TXINV-2024-001",
                 "http://example.com/doc.pdf", 12345L, true, "corr-456"
         );
 
@@ -153,8 +151,7 @@ class CamelRouteConfigTest {
                 "sagaStep": "generate-tax-invoice-pdf",
                 "correlationId": "corr-456",
                 "documentId": "doc-123",
-                "taxInvoiceId": "tax-inv-001",
-                "taxInvoiceNumber": "TXINV-2024-001",
+                "documentNumber": "TXINV-2024-001",
                 "signedXmlUrl": "<TaxInvoice>signed</TaxInvoice>",
                 "taxInvoiceDataJson": "{\\"key\\": \\"value\\"}"
             }
@@ -169,8 +166,7 @@ class CamelRouteConfigTest {
         assertThat(cmd.getSagaStep()).isEqualTo(SagaStep.GENERATE_TAX_INVOICE_PDF);
         assertThat(cmd.getCorrelationId()).isEqualTo("corr-456");
         assertThat(cmd.getDocumentId()).isEqualTo("doc-123");
-        assertThat(cmd.getTaxInvoiceId()).isEqualTo("tax-inv-001");
-        assertThat(cmd.getTaxInvoiceNumber()).isEqualTo("TXINV-2024-001");
+        assertThat(cmd.getDocumentNumber()).isEqualTo("TXINV-2024-001");
         assertThat(cmd.getSignedXmlUrl()).isEqualTo("<TaxInvoice>signed</TaxInvoice>");
         assertThat(cmd.getTaxInvoiceDataJson()).isEqualTo("{\"key\": \"value\"}");
     }

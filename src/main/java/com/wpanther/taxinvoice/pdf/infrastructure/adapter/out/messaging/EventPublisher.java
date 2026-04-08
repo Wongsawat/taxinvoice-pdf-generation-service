@@ -39,13 +39,13 @@ public class EventPublisher implements PdfEventPort {
         outboxService.saveWithRouting(
             event,
             AGGREGATE_TYPE,
-            event.getTaxInvoiceId(),
+            event.getDocumentId(),
             "pdf.generated.tax-invoice",
-            event.getTaxInvoiceId(),
+            event.getDocumentId(),
             toJson(headers)
         );
 
-        log.info("Published TaxInvoicePdfGeneratedEvent to outbox for notification: {}", event.getTaxInvoiceNumber());
+        log.info("Published TaxInvoicePdfGeneratedEvent to outbox for notification: {}", event.getDocumentNumber());
     }
 
     private String toJson(Map<String, String> map) {

@@ -16,9 +16,7 @@ public class KafkaTaxInvoiceProcessCommand extends SagaCommand {
     @Getter
     @JsonProperty("documentId")   private final String documentId;
     @Getter
-    @JsonProperty("taxInvoiceId") private final String taxInvoiceId;
-    @Getter
-    @JsonProperty("taxInvoiceNumber") private final String taxInvoiceNumber;
+    @JsonProperty("documentNumber") private final String documentNumber;
     @Getter
     @JsonProperty("signedXmlUrl") private final String signedXmlUrl;
     @Getter
@@ -34,26 +32,23 @@ public class KafkaTaxInvoiceProcessCommand extends SagaCommand {
             @JsonProperty("sagaStep") SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
             @JsonProperty("documentId") String documentId,
-            @JsonProperty("taxInvoiceId") String taxInvoiceId,
-            @JsonProperty("taxInvoiceNumber") String taxInvoiceNumber,
+            @JsonProperty("documentNumber") String documentNumber,
             @JsonProperty("signedXmlUrl") String signedXmlUrl,
             @JsonProperty("taxInvoiceDataJson") String taxInvoiceDataJson) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.taxInvoiceId = taxInvoiceId;
-        this.taxInvoiceNumber = taxInvoiceNumber;
+        this.documentNumber = documentNumber;
         this.signedXmlUrl = signedXmlUrl;
         this.taxInvoiceDataJson = taxInvoiceDataJson;
     }
 
     /** Convenience constructor for testing. */
     public KafkaTaxInvoiceProcessCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                         String documentId, String taxInvoiceId, String taxInvoiceNumber,
+                                         String documentId, String documentNumber,
                                          String signedXmlUrl, String taxInvoiceDataJson) {
         super(sagaId, sagaStep, correlationId);
         this.documentId = documentId;
-        this.taxInvoiceId = taxInvoiceId;
-        this.taxInvoiceNumber = taxInvoiceNumber;
+        this.documentNumber = documentNumber;
         this.signedXmlUrl = signedXmlUrl;
         this.taxInvoiceDataJson = taxInvoiceDataJson;
     }
@@ -79,12 +74,8 @@ public class KafkaTaxInvoiceProcessCommand extends SagaCommand {
         return documentId;
     }
 
-    public String getTaxInvoiceId() {
-        return taxInvoiceId;
-    }
-
-    public String getTaxInvoiceNumber() {
-        return taxInvoiceNumber;
+    public String getDocumentNumber() {
+        return documentNumber;
     }
 
     public String getSignedXmlUrl() {

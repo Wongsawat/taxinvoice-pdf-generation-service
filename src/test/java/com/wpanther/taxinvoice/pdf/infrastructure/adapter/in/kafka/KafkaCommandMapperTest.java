@@ -13,15 +13,14 @@ class KafkaCommandMapperTest {
         var src = new KafkaTaxInvoiceProcessCommand(
                 null, null, null, 0,
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "tinv-1", "TINV-001", "http://minio/xml", "{\"k\":\"v\"}");
+                "doc-1", "TINV-001", "http://minio/xml", "{\"k\":\"v\"}");
 
         var result = mapper.toProcess(src);
 
         assertThat(result.getSagaId()).isEqualTo("saga-1");
         assertThat(result.getCorrelationId()).isEqualTo("corr-1");
         assertThat(result.getDocumentId()).isEqualTo("doc-1");
-        assertThat(result.getTaxInvoiceId()).isEqualTo("tinv-1");
-        assertThat(result.getTaxInvoiceNumber()).isEqualTo("TINV-001");
+        assertThat(result.getDocumentNumber()).isEqualTo("TINV-001");
         assertThat(result.getSignedXmlUrl()).isEqualTo("http://minio/xml");
         assertThat(result.getTaxInvoiceDataJson()).isEqualTo("{\"k\":\"v\"}");
     }
@@ -31,13 +30,12 @@ class KafkaCommandMapperTest {
         var src = new KafkaTaxInvoiceCompensateCommand(
                 null, null, null, 0,
                 "saga-2", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-2",
-                "doc-2", "tinv-2");
+                "doc-2");
 
         var result = mapper.toCompensate(src);
 
         assertThat(result.getSagaId()).isEqualTo("saga-2");
         assertThat(result.getCorrelationId()).isEqualTo("corr-2");
         assertThat(result.getDocumentId()).isEqualTo("doc-2");
-        assertThat(result.getTaxInvoiceId()).isEqualTo("tinv-2");
     }
 }

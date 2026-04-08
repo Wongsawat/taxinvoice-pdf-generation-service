@@ -67,7 +67,7 @@ class SagaCommandHandlerTest {
     private KafkaTaxInvoiceProcessCommand createProcessCommand() {
         return new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "doc-123", "TXINV-2024-001",
                 SIGNED_XML_URL, "{}"
         );
     }
@@ -75,14 +75,14 @@ class SagaCommandHandlerTest {
     private KafkaTaxInvoiceCompensateCommand createCompensateCommand() {
         return new KafkaTaxInvoiceCompensateCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123", "tax-inv-001"
+                "doc-123"
         );
     }
 
     private TaxInvoicePdfDocument createCompletedDocument() {
         TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
-                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceId("doc-123")
                 .taxInvoiceNumber("TXINV-2024-001")
                 .status(GenerationStatus.COMPLETED)
                 .documentPath("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf")
@@ -97,16 +97,16 @@ class SagaCommandHandlerTest {
     void testHandleProcessCommand_Success() throws Exception {
         // Given
         KafkaTaxInvoiceProcessCommand command = createProcessCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
 
         TaxInvoicePdfDocument generatingDoc = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
-                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceId("doc-123")
                 .taxInvoiceNumber("TXINV-2024-001")
                 .status(GenerationStatus.GENERATING)
                 .build();
-        when(pdfDocumentService.beginGeneration("tax-inv-001", "TXINV-2024-001"))
+        when(pdfDocumentService.beginGeneration("doc-123", "TXINV-2024-001"))
                 .thenReturn(generatingDoc);
 
         byte[] pdfBytes = new byte[5000];
@@ -121,7 +121,7 @@ class SagaCommandHandlerTest {
         getHandler().handle(command);
 
         // Then
-        verify(pdfDocumentService).beginGeneration("tax-inv-001", "TXINV-2024-001");
+        verify(pdfDocumentService).beginGeneration("doc-123", "TXINV-2024-001");
         verify(pdfGenerationService).generatePdf("TXINV-2024-001", SIGNED_XML_CONTENT, "{}");
         verify(pdfStoragePort).store("TXINV-2024-001", pdfBytes);
         verify(pdfDocumentService).completeGenerationAndPublish(
@@ -140,7 +140,7 @@ class SagaCommandHandlerTest {
         // Given
         KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         TaxInvoicePdfDocument completedDoc = createCompletedDocument();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(completedDoc));
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(completedDoc));
 
         // When
         getHandler().handle(command);
@@ -157,12 +157,12 @@ class SagaCommandHandlerTest {
         KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         TaxInvoicePdfDocument failedDoc = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
-                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceId("doc-123")
                 .taxInvoiceNumber("TXINV-2024-001")
                 .status(GenerationStatus.FAILED)
                 .retryCount(3)
                 .build();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(failedDoc));
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(failedDoc));
 
         // When
         getHandler().handle(command);
@@ -177,7 +177,7 @@ class SagaCommandHandlerTest {
         // Given
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123", "tax-inv-001", "TXINV-2024-001",
+                "doc-123", "TXINV-2024-001",
                 null, "{}");
 
         // When
@@ -192,16 +192,16 @@ class SagaCommandHandlerTest {
     void testHandleProcessCommand_GenerationFails() throws Exception {
         // Given
         KafkaTaxInvoiceProcessCommand command = createProcessCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
 
         TaxInvoicePdfDocument generatingDoc = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
-                .taxInvoiceId("tax-inv-001")
+                .taxInvoiceId("doc-123")
                 .taxInvoiceNumber("TXINV-2024-001")
                 .status(GenerationStatus.GENERATING)
                 .build();
-        when(pdfDocumentService.beginGeneration("tax-inv-001", "TXINV-2024-001"))
+        when(pdfDocumentService.beginGeneration("doc-123", "TXINV-2024-001"))
                 .thenReturn(generatingDoc);
 
         when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
@@ -224,7 +224,7 @@ class SagaCommandHandlerTest {
     void testHandleProcessCommand_CircuitBreakerOpen() throws Exception {
         // Given
         KafkaTaxInvoiceProcessCommand command = createProcessCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL))
                 .thenThrow(new RuntimeException("Circuit breaker open"));
 
@@ -241,7 +241,7 @@ class SagaCommandHandlerTest {
         // Given
         KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
         TaxInvoicePdfDocument doc = createCompletedDocument();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(doc));
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(doc));
 
         // When
         getHandler().handle(command);
@@ -257,7 +257,7 @@ class SagaCommandHandlerTest {
     void testHandleCompensation_NoDocumentFound() {
         // Given
         KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
 
         // When
         getHandler().handle(command);
@@ -274,7 +274,7 @@ class SagaCommandHandlerTest {
         // Given
         KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
         TaxInvoicePdfDocument doc = createCompletedDocument();
-        when(pdfDocumentService.findByTaxInvoiceId("tax-inv-001")).thenReturn(Optional.of(doc));
+        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(doc));
         doThrow(new RuntimeException("MinIO unavailable")).when(pdfStoragePort).delete(anyString());
 
         // When

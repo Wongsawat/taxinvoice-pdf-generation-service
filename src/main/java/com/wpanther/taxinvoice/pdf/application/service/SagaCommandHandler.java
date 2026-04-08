@@ -32,8 +32,8 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
 
     private static final String MDC_SAGA_ID        = "sagaId";
     private static final String MDC_CORRELATION_ID = "correlationId";
-    private static final String MDC_TAX_INVOICE_NUM = "taxInvoiceNumber";
-    private static final String MDC_TAX_INVOICE_ID  = "taxInvoiceId";
+    private static final String MDC_DOCUMENT_NUMBER = "documentNumber";
+    private static final String MDC_DOCUMENT_ID     = "documentId";
 
     private final TaxInvoicePdfDocumentService pdfDocumentService;
     private final TaxInvoicePdfGenerationService pdfGenerationService;
@@ -60,31 +60,31 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
     public void handle(KafkaTaxInvoiceProcessCommand command) {
         MDC.put(MDC_SAGA_ID,         command.getSagaId());
         MDC.put(MDC_CORRELATION_ID,  command.getCorrelationId());
-        MDC.put(MDC_TAX_INVOICE_NUM, command.getTaxInvoiceNumber());
-        MDC.put(MDC_TAX_INVOICE_ID,  command.getTaxInvoiceId());
+        MDC.put(MDC_DOCUMENT_NUMBER, command.getDocumentNumber());
+        MDC.put(MDC_DOCUMENT_ID,     command.getDocumentId());
         try {
-            log.info("Handling ProcessCommand for saga {} taxInvoice {}",
-                    command.getSagaId(), command.getTaxInvoiceNumber());
+            log.info("Handling ProcessCommand for saga {} document {}",
+                    command.getSagaId(), command.getDocumentNumber());
             try {
                 String signedXmlUrl  = command.getSignedXmlUrl();
-                String taxInvoiceId  = command.getTaxInvoiceId();
-                String taxInvoiceNum = command.getTaxInvoiceNumber();
+                String documentId    = command.getDocumentId();
+                String documentNum   = command.getDocumentNumber();
 
                 if (signedXmlUrl == null || signedXmlUrl.isBlank()) {
                     pdfDocumentService.publishGenerationFailure(command, "signedXmlUrl is null or blank");
                     return;
                 }
-                if (taxInvoiceId == null || taxInvoiceId.isBlank()) {
-                    pdfDocumentService.publishGenerationFailure(command, "taxInvoiceId is null or blank");
+                if (documentId == null || documentId.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(command, "documentId is null or blank");
                     return;
                 }
-                if (taxInvoiceNum == null || taxInvoiceNum.isBlank()) {
-                    pdfDocumentService.publishGenerationFailure(command, "taxInvoiceNumber is null or blank");
+                if (documentNum == null || documentNum.isBlank()) {
+                    pdfDocumentService.publishGenerationFailure(command, "documentNumber is null or blank");
                     return;
                 }
 
                 Optional<TaxInvoicePdfDocument> existing =
-                        pdfDocumentService.findByTaxInvoiceId(taxInvoiceId);
+                        pdfDocumentService.findByTaxInvoiceId(documentId);
 
                 if (existing.isPresent() && existing.get().isCompleted()) {
                     pdfDocumentService.publishIdempotentSuccess(existing.get(), command);
@@ -104,9 +104,9 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                 TaxInvoicePdfDocument document;
                 if (existing.isPresent()) {
                     document = pdfDocumentService.replaceAndBeginGeneration(
-                            existing.get().getId(), previousRetryCount, taxInvoiceId, taxInvoiceNum);
+                            existing.get().getId(), previousRetryCount, documentId, documentNum);
                 } else {
-                    document = pdfDocumentService.beginGeneration(taxInvoiceId, taxInvoiceNum);
+                    document = pdfDocumentService.beginGeneration(documentId, documentNum);
                 }
 
                 String s3Key = null;
@@ -114,8 +114,8 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                     // NO TRANSACTION: download, generate, upload
                     String signedXml = signedXmlFetchPort.fetch(signedXmlUrl);
                     byte[] pdfBytes  = pdfGenerationService.generatePdf(
-                            taxInvoiceNum, signedXml, command.getTaxInvoiceDataJson());
-                    s3Key = pdfStoragePort.store(taxInvoiceNum, pdfBytes);
+                            documentNum, signedXml, command.getTaxInvoiceDataJson());
+                    s3Key = pdfStoragePort.store(documentNum, pdfBytes);
                     String fileUrl   = pdfStoragePort.resolveUrl(s3Key);
 
                     // TX2: mark COMPLETED + write outbox
@@ -124,16 +124,16 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
 
                 } catch (CallNotPermittedException e) {
                     // Circuit breaker is OPEN - upstream service is degraded
-                    log.warn("Circuit breaker OPEN for saga {} taxInvoice {}: {}",
-                            command.getSagaId(), taxInvoiceNum, e.getMessage());
+                    log.warn("Circuit breaker OPEN for saga {} document {}: {}",
+                            command.getSagaId(), documentNum, e.getMessage());
                     pdfDocumentService.failGenerationAndPublish(
                             document.getId(), "Circuit breaker open: " + e.getMessage(),
                             previousRetryCount, command);
 
                 } catch (RestClientException e) {
                     // HTTP 4xx/5xx from signed XML fetch - upstream service error
-                    log.warn("HTTP error fetching signed XML for saga {} taxInvoice {}: {}",
-                            command.getSagaId(), taxInvoiceNum, e.getMessage());
+                    log.warn("HTTP error fetching signed XML for saga {} document {}: {}",
+                            command.getSagaId(), documentNum, e.getMessage());
                     pdfDocumentService.failGenerationAndPublish(
                             document.getId(), "HTTP error fetching signed XML: " + describeThrowable(e),
                             previousRetryCount, command);
@@ -147,8 +147,8 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                                     describeThrowable(del));
                         }
                     }
-                    log.error("PDF generation failed for saga {} taxInvoice {}: {}",
-                            command.getSagaId(), taxInvoiceNum, e.getMessage(), e);
+                    log.error("PDF generation failed for saga {} document {}: {}",
+                            command.getSagaId(), documentNum, e.getMessage(), e);
                     pdfDocumentService.failGenerationAndPublish(
                             document.getId(), describeThrowable(e), previousRetryCount, command);
                 }
@@ -169,13 +169,13 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
     public void handle(KafkaTaxInvoiceCompensateCommand command) {
         MDC.put(MDC_SAGA_ID,        command.getSagaId());
         MDC.put(MDC_CORRELATION_ID,  command.getCorrelationId());
-        MDC.put(MDC_TAX_INVOICE_ID,  command.getTaxInvoiceId());
+        MDC.put(MDC_DOCUMENT_ID,     command.getDocumentId());
         try {
-            log.info("Handling compensation for saga {} taxInvoice {}",
-                    command.getSagaId(), command.getTaxInvoiceId());
+            log.info("Handling compensation for saga {} document {}",
+                    command.getSagaId(), command.getDocumentId());
             try {
                 Optional<TaxInvoicePdfDocument> existing =
-                        pdfDocumentService.findByTaxInvoiceId(command.getTaxInvoiceId());
+                        pdfDocumentService.findByTaxInvoiceId(command.getDocumentId());
 
                 if (existing.isPresent()) {
                     TaxInvoicePdfDocument doc = existing.get();
@@ -190,8 +190,8 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                     log.info("Compensated TaxInvoicePdfDocument {} for saga {}",
                             doc.getId(), command.getSagaId());
                 } else {
-                    log.info("No document for taxInvoiceId {} — already compensated",
-                            command.getTaxInvoiceId());
+                    log.info("No document for documentId {} — already compensated",
+                            command.getDocumentId());
                 }
                 pdfDocumentService.publishCompensated(command);
 

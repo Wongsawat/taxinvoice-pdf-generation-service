@@ -92,7 +92,7 @@ public class MinioStorageAdapter implements PdfStoragePort {
     }
 
     /**
-     * Sanitize invoice number for use in S3 object key.
+     * Sanitize document number for use in S3 object key.
      * <p>
      * Preserves Unicode characters (including Thai) while removing characters
      * problematic for file systems and URLs. S3 supports Unicode in object keys.
@@ -103,13 +103,13 @@ public class MinioStorageAdapter implements PdfStoragePort {
      * - URL problematic: " ' * ? < > | : & ; space
      * - Reserved for S3 special handling: @
      *
-     * @param invoiceNumber the raw invoice number
+     * @param rawNumber the raw document number
      * @return sanitized filename safe for S3 and file systems
      */
-    private String sanitizeFilename(String invoiceNumber) {
+    private String sanitizeFilename(String rawNumber) {
         // Remove control characters and problematic file system/URL characters
         // Preserves alphanumeric, Thai/Unicode characters, and safe special chars
-        return invoiceNumber.replaceAll("[\\x00-\\x1F\\x7F\\\\\"'*?<>|:&; @]", "_")
+        return rawNumber.replaceAll("[\\x00-\\x1F\\x7F\\\\\"'*?<>|:&; @]", "_")
                 .replaceAll("\\s+", "_");  // Replace whitespace with single underscore
     }
 

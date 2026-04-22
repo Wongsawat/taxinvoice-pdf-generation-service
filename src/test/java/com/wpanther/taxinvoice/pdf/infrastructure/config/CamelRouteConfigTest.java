@@ -52,7 +52,7 @@ class CamelRouteConfigTest {
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "TXINV-2024-001",
-                "<TaxInvoice>...</TaxInvoice>", "{}"
+                "http://minio/taxinvoice-signed.xml"
         );
 
         // When
@@ -65,8 +65,7 @@ class CamelRouteConfigTest {
         assertThat(deserialized.getCorrelationId()).isEqualTo("corr-456");
         assertThat(deserialized.getDocumentId()).isEqualTo("doc-123");
         assertThat(deserialized.getDocumentNumber()).isEqualTo("TXINV-2024-001");
-        assertThat(deserialized.getSignedXmlUrl()).isEqualTo("<TaxInvoice>...</TaxInvoice>");
-        assertThat(deserialized.getTaxInvoiceDataJson()).isEqualTo("{}");
+        assertThat(deserialized.getSignedXmlUrl()).isEqualTo("http://minio/taxinvoice-signed.xml");
         assertThat(deserialized.getEventId()).isNotNull();
     }
 
@@ -152,8 +151,7 @@ class CamelRouteConfigTest {
                 "correlationId": "corr-456",
                 "documentId": "doc-123",
                 "documentNumber": "TXINV-2024-001",
-                "signedXmlUrl": "<TaxInvoice>signed</TaxInvoice>",
-                "taxInvoiceDataJson": "{\\"key\\": \\"value\\"}"
+                "signedXmlUrl": "<TaxInvoice>signed</TaxInvoice>"
             }
             """;
 
@@ -168,6 +166,5 @@ class CamelRouteConfigTest {
         assertThat(cmd.getDocumentId()).isEqualTo("doc-123");
         assertThat(cmd.getDocumentNumber()).isEqualTo("TXINV-2024-001");
         assertThat(cmd.getSignedXmlUrl()).isEqualTo("<TaxInvoice>signed</TaxInvoice>");
-        assertThat(cmd.getTaxInvoiceDataJson()).isEqualTo("{\"key\": \"value\"}");
     }
 }

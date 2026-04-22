@@ -13,14 +13,12 @@ import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
@@ -68,7 +66,7 @@ class SagaCommandHandlerTest {
         return new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "TXINV-2024-001",
-                SIGNED_XML_URL, "{}"
+                SIGNED_XML_URL
         );
     }
 
@@ -178,7 +176,7 @@ class SagaCommandHandlerTest {
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
                 "doc-123", "TXINV-2024-001",
-                null, "{}");
+                null);
 
         // When
         getHandler().handle(command);

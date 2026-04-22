@@ -13,7 +13,7 @@ class KafkaCommandMapperTest {
         var src = new KafkaTaxInvoiceProcessCommand(
                 null, null, null, 0,
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
-                "doc-1", "TINV-001", "http://minio/xml", "{\"k\":\"v\"}");
+                "doc-1", "TINV-001", "http://minio/xml");
 
         var result = mapper.toProcess(src);
 
@@ -22,7 +22,6 @@ class KafkaCommandMapperTest {
         assertThat(result.getDocumentId()).isEqualTo("doc-1");
         assertThat(result.getDocumentNumber()).isEqualTo("TINV-001");
         assertThat(result.getSignedXmlUrl()).isEqualTo("http://minio/xml");
-        assertThat(result.getTaxInvoiceDataJson()).isEqualTo("{\"k\":\"v\"}");
     }
 
     @Test

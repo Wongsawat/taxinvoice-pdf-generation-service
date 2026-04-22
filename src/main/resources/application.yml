@@ -76,7 +76,6 @@ app:
       max-pdf-size-bytes: ${PDF_MAX_SIZE_BYTES:52428800}
   taxinvoice:
     default-vat-rate: ${TAXINVOICE_DEFAULT_VAT_RATE:7}
-    max-json-size-bytes: ${TAXINVOICE_MAX_JSON_SIZE_BYTES:1048576}
   rest-client:
     connect-timeout: ${REST_CLIENT_CONNECT_TIMEOUT:5000}
     read-timeout: ${REST_CLIENT_READ_TIMEOUT:10000}  # Increase to 30000+ ms in production for large signed XML

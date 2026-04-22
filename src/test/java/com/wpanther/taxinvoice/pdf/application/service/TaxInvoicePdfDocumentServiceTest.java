@@ -130,7 +130,7 @@ class TaxInvoicePdfDocumentServiceTest {
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
                 "doc-1", "TXINV-001",
-                "http://minio:9000/signed.xml", "{}");
+                "http://minio:9000/signed.xml");
 
         // When
         var service = getService();
@@ -149,7 +149,7 @@ class TaxInvoicePdfDocumentServiceTest {
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
                 "doc-1", "TXINV-001",
-                "http://minio:9000/signed.xml", "{}");
+                "http://minio:9000/signed.xml");
 
         // When
         var service = getService();
@@ -167,7 +167,7 @@ class TaxInvoicePdfDocumentServiceTest {
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
                 "doc-1", "TXINV-001",
-                "http://minio:9000/signed.xml", "{}");
+                "http://minio:9000/signed.xml");
         String errorMessage = "Invalid XML format";
 
         // When
@@ -242,7 +242,7 @@ class TaxInvoicePdfDocumentServiceTest {
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
                 "doc-1", "TXINV-001",
-                "http://minio:9000/signed.xml", "{}");
+                "http://minio:9000/signed.xml");
 
         // When
         var service = getService();
@@ -288,7 +288,7 @@ class TaxInvoicePdfDocumentServiceTest {
         KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
                 "saga-1", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-1",
                 "doc-1", "TXINV-001",
-                "http://minio:9000/signed.xml", "{}");
+                "http://minio:9000/signed.xml");
         String errorMessage = "PDF generation failed";
 
         // When

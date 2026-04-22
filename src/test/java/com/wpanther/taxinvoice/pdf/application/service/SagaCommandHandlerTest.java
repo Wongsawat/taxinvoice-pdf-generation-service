@@ -9,7 +9,7 @@ import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
-import com.wpanther.taxinvoice.pdf.domain.exception.TaxInvoicePdfGenerationException;
+import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -110,7 +110,7 @@ class SagaCommandHandlerTest {
                 .thenReturn(generatingDoc);
 
         byte[] pdfBytes = new byte[5000];
-        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
+        when(pdfGenerationService.generatePdf(anyString(), anyString()))
                 .thenReturn(pdfBytes);
         when(pdfStoragePort.store(anyString(), any(byte[].class)))
                 .thenReturn("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf");
@@ -122,7 +122,7 @@ class SagaCommandHandlerTest {
 
         // Then
         verify(pdfDocumentService).beginGeneration("doc-123", "TXINV-2024-001");
-        verify(pdfGenerationService).generatePdf("TXINV-2024-001", SIGNED_XML_CONTENT, "{}");
+        verify(pdfGenerationService).generatePdf("TXINV-2024-001", SIGNED_XML_CONTENT);
         verify(pdfStoragePort).store("TXINV-2024-001", pdfBytes);
         verify(pdfDocumentService).completeGenerationAndPublish(
                 eq(generatingDoc.getId()),
@@ -204,7 +204,7 @@ class SagaCommandHandlerTest {
         when(pdfDocumentService.beginGeneration("doc-123", "TXINV-2024-001"))
                 .thenReturn(generatingDoc);
 
-        when(pdfGenerationService.generatePdf(anyString(), anyString(), anyString()))
+        when(pdfGenerationService.generatePdf(anyString(), anyString()))
                 .thenThrow(new TaxInvoicePdfGenerationException("FOP failed"));
 
         // When

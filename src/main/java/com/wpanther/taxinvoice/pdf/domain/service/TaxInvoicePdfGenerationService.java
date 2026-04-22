@@ -1,32 +1,20 @@
 package com.wpanther.taxinvoice.pdf.domain.service;
 
-/**
- * Domain service for Tax Invoice PDF generation
- */
 public interface TaxInvoicePdfGenerationService {
 
     /**
-     * Generate PDF from tax invoice data
+     * Generate PDF/A-3 from the signed XML document.
      *
-     * @param taxInvoiceNumber Tax invoice number
-     * @param xmlContent XML content to embed
-     * @param taxInvoiceDataJson JSON data for template
-     * @return PDF bytes
+     * @param taxInvoiceNumber document number (used for logging and file naming)
+     * @param signedXml        full Thai e-Tax signed XML (rsm:TaxInvoice_CrossIndustryInvoice)
+     * @return PDF/A-3 bytes with the signed XML embedded as an attachment
      * @throws TaxInvoicePdfGenerationException if generation fails
      */
-    byte[] generatePdf(String taxInvoiceNumber, String xmlContent, String taxInvoiceDataJson)
+    byte[] generatePdf(String taxInvoiceNumber, String signedXml)
         throws TaxInvoicePdfGenerationException;
 
-    /**
-     * Exception thrown when PDF generation fails
-     */
     class TaxInvoicePdfGenerationException extends Exception {
-        public TaxInvoicePdfGenerationException(String message) {
-            super(message);
-        }
-
-        public TaxInvoicePdfGenerationException(String message, Throwable cause) {
-            super(message, cause);
-        }
+        public TaxInvoicePdfGenerationException(String message) { super(message); }
+        public TaxInvoicePdfGenerationException(String message, Throwable cause) { super(message, cause); }
     }
 }

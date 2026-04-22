@@ -114,7 +114,7 @@ public class SagaCommandHandler implements ProcessTaxInvoicePdfUseCase, Compensa
                     // NO TRANSACTION: download, generate, upload
                     String signedXml = signedXmlFetchPort.fetch(signedXmlUrl);
                     byte[] pdfBytes  = pdfGenerationService.generatePdf(
-                            documentNum, signedXml, command.getTaxInvoiceDataJson());
+                            documentNum, signedXml);
                     s3Key = pdfStoragePort.store(documentNum, pdfBytes);
                     String fileUrl   = pdfStoragePort.resolveUrl(s3Key);
 

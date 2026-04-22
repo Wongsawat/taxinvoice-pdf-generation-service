@@ -13,76 +13,41 @@ public class KafkaTaxInvoiceProcessCommand extends SagaCommand {
 
     private static final long serialVersionUID = 1L;
 
-    @Getter
-    @JsonProperty("documentId")   private final String documentId;
-    @Getter
-    @JsonProperty("documentNumber") private final String documentNumber;
-    @Getter
-    @JsonProperty("signedXmlUrl") private final String signedXmlUrl;
-    @Getter
-    @JsonProperty("taxInvoiceDataJson") private final String taxInvoiceDataJson;
+    @Getter @JsonProperty("documentId")    private final String documentId;
+    @Getter @JsonProperty("documentNumber") private final String documentNumber;
+    @Getter @JsonProperty("signedXmlUrl")  private final String signedXmlUrl;
 
     @JsonCreator
     public KafkaTaxInvoiceProcessCommand(
-            @JsonProperty("eventId") UUID eventId,
-            @JsonProperty("occurredAt") Instant occurredAt,
-            @JsonProperty("eventType") String eventType,
-            @JsonProperty("version") int version,
-            @JsonProperty("sagaId") String sagaId,
-            @JsonProperty("sagaStep") SagaStep sagaStep,
+            @JsonProperty("eventId")       UUID eventId,
+            @JsonProperty("occurredAt")    Instant occurredAt,
+            @JsonProperty("eventType")     String eventType,
+            @JsonProperty("version")       int version,
+            @JsonProperty("sagaId")        String sagaId,
+            @JsonProperty("sagaStep")      SagaStep sagaStep,
             @JsonProperty("correlationId") String correlationId,
-            @JsonProperty("documentId") String documentId,
+            @JsonProperty("documentId")    String documentId,
             @JsonProperty("documentNumber") String documentNumber,
-            @JsonProperty("signedXmlUrl") String signedXmlUrl,
-            @JsonProperty("taxInvoiceDataJson") String taxInvoiceDataJson) {
+            @JsonProperty("signedXmlUrl")  String signedXmlUrl) {
         super(eventId, occurredAt, eventType, version, sagaId, sagaStep, correlationId);
-        this.documentId = documentId;
+        this.documentId     = documentId;
         this.documentNumber = documentNumber;
-        this.signedXmlUrl = signedXmlUrl;
-        this.taxInvoiceDataJson = taxInvoiceDataJson;
+        this.signedXmlUrl   = signedXmlUrl;
     }
 
     /** Convenience constructor for testing. */
     public KafkaTaxInvoiceProcessCommand(String sagaId, SagaStep sagaStep, String correlationId,
-                                         String documentId, String documentNumber,
-                                         String signedXmlUrl, String taxInvoiceDataJson) {
+                                         String documentId, String documentNumber, String signedXmlUrl) {
         super(sagaId, sagaStep, correlationId);
-        this.documentId = documentId;
+        this.documentId     = documentId;
         this.documentNumber = documentNumber;
-        this.signedXmlUrl = signedXmlUrl;
-        this.taxInvoiceDataJson = taxInvoiceDataJson;
+        this.signedXmlUrl   = signedXmlUrl;
     }
 
-    // Explicit getters for parent class fields (SagaCommand doesn't use @Getter)
-    @Override
-    public String getSagaId() {
-        return super.getSagaId();
-    }
-
-    @Override
-    public SagaStep getSagaStep() {
-        return super.getSagaStep();
-    }
-
-    @Override
-    public String getCorrelationId() {
-        return super.getCorrelationId();
-    }
-
-    // Explicit getter for documentId (Lombok @Getter might not be processed)
-    public String getDocumentId() {
-        return documentId;
-    }
-
-    public String getDocumentNumber() {
-        return documentNumber;
-    }
-
-    public String getSignedXmlUrl() {
-        return signedXmlUrl;
-    }
-
-    public String getTaxInvoiceDataJson() {
-        return taxInvoiceDataJson;
-    }
+    @Override public String getSagaId()        { return super.getSagaId(); }
+    @Override public SagaStep getSagaStep()    { return super.getSagaStep(); }
+    @Override public String getCorrelationId() { return super.getCorrelationId(); }
+    public String getDocumentId()     { return documentId; }
+    public String getDocumentNumber() { return documentNumber; }
+    public String getSignedXmlUrl()   { return signedXmlUrl; }
 }

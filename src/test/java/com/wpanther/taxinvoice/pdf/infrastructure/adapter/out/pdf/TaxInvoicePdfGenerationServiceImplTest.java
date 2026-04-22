@@ -1,6 +1,5 @@
 package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.pdf;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -8,8 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -19,294 +19,149 @@ import static org.mockito.Mockito.*;
 @DisplayName("TaxInvoicePdfGenerationServiceImpl Unit Tests")
 class TaxInvoicePdfGenerationServiceImplTest {
 
-    @Mock
-    private FopTaxInvoicePdfGenerator fopPdfGenerator;
-
-    @Mock
-    private PdfA3Converter pdfA3Converter;
-
-    @Spy
-    private ObjectMapper objectMapper = new ObjectMapper();
+    @Mock private FopTaxInvoicePdfGenerator fopPdfGenerator;
+    @Mock private PdfA3Converter pdfA3Converter;
 
     private TaxInvoicePdfGenerationServiceImpl service;
 
+    private static final String DOC_NUMBER = "TXINV-2024-001";
+
+    // Minimal signed XML with a GrandTotalAmount of 1070
+    private static final String SIGNED_XML =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+        "<rsm:TaxInvoice_CrossIndustryInvoice " +
+        "    xmlns:ram=\"urn:etda:uncefact:data:standard:TaxInvoice_ReusableAggregateBusinessInformationEntity:2\"" +
+        "    xmlns:rsm=\"urn:etda:uncefact:data:standard:TaxInvoice_CrossIndustryInvoice:2\">" +
+        "  <rsm:ExchangedDocument><ram:ID>TXINV-2024-001</ram:ID><ram:IssueDateTime>2024-01-15T00:00:00.0</ram:IssueDateTime></rsm:ExchangedDocument>" +
+        "  <rsm:SupplyChainTradeTransaction>" +
+        "    <ram:ApplicableHeaderTradeAgreement>" +
+        "      <ram:SellerTradeParty><ram:Name>Seller</ram:Name><ram:SpecifiedTaxRegistration><ram:ID>1111111111111</ram:ID></ram:SpecifiedTaxRegistration></ram:SellerTradeParty>" +
+        "      <ram:BuyerTradeParty><ram:Name>Buyer</ram:Name><ram:SpecifiedTaxRegistration><ram:ID>2222222222222</ram:ID></ram:SpecifiedTaxRegistration></ram:BuyerTradeParty>" +
+        "    </ram:ApplicableHeaderTradeAgreement>" +
+        "    <ram:ApplicableHeaderTradeDelivery/>" +
+        "    <ram:ApplicableHeaderTradeSettlement>" +
+        "      <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>" +
+        "      <ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CalculatedRate>7</ram:CalculatedRate></ram:ApplicableTradeTax>" +
+        "      <ram:SpecifiedTradeSettlementHeaderMonetarySummation>" +
+        "        <ram:LineTotalAmount>1000</ram:LineTotalAmount>" +
+        "        <ram:AllowanceTotalAmount>0</ram:AllowanceTotalAmount>" +
+        "        <ram:TaxBasisTotalAmount>1000</ram:TaxBasisTotalAmount>" +
+        "        <ram:TaxTotalAmount>70</ram:TaxTotalAmount>" +
+        "        <ram:GrandTotalAmount>1070</ram:GrandTotalAmount>" +
+        "      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>" +
+        "    </ram:ApplicableHeaderTradeSettlement>" +
+        "    <ram:IncludedSupplyChainTradeLineItem>" +
+        "      <ram:AssociatedDocumentLineDocument><ram:LineID>1</ram:LineID></ram:AssociatedDocumentLineDocument>" +
+        "      <ram:SpecifiedTradeProduct><ram:Name>Item</ram:Name></ram:SpecifiedTradeProduct>" +
+        "      <ram:SpecifiedLineTradeAgreement><ram:GrossPriceProductTradePrice><ram:ChargeAmount>1000</ram:ChargeAmount></ram:GrossPriceProductTradePrice></ram:SpecifiedLineTradeAgreement>" +
+        "      <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode=\"EA\">1</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>" +
+        "      <ram:SpecifiedLineTradeSettlement><ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode></ram:ApplicableTradeTax>" +
+        "        <ram:SpecifiedTradeSettlementLineMonetarySummation><ram:NetLineTotalAmount>1000</ram:NetLineTotalAmount></ram:SpecifiedTradeSettlementLineMonetarySummation>" +
+        "      </ram:SpecifiedLineTradeSettlement>" +
+        "    </ram:IncludedSupplyChainTradeLineItem>" +
+        "  </rsm:SupplyChainTradeTransaction>" +
+        "</rsm:TaxInvoice_CrossIndustryInvoice>";
+
+    private static final String SIGNED_XML_NO_GRAND_TOTAL =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+        "<rsm:TaxInvoice_CrossIndustryInvoice " +
+        "    xmlns:ram=\"urn:etda:uncefact:data:standard:TaxInvoice_ReusableAggregateBusinessInformationEntity:2\"" +
+        "    xmlns:rsm=\"urn:etda:uncefact:data:standard:TaxInvoice_CrossIndustryInvoice:2\">" +
+        "  <rsm:ExchangedDocument><ram:ID>X</ram:ID></rsm:ExchangedDocument>" +
+        "  <rsm:SupplyChainTradeTransaction>" +
+        "    <ram:ApplicableHeaderTradeSettlement>" +
+        "      <ram:SpecifiedTradeSettlementHeaderMonetarySummation/>" +
+        "    </ram:ApplicableHeaderTradeSettlement>" +
+        "  </rsm:SupplyChainTradeTransaction>" +
+        "</rsm:TaxInvoice_CrossIndustryInvoice>";
+
     @BeforeEach
     void setUp() {
-        service = new TaxInvoicePdfGenerationServiceImpl(fopPdfGenerator, pdfA3Converter, objectMapper, 1048576);
+        service = new TaxInvoicePdfGenerationServiceImpl(fopPdfGenerator, pdfA3Converter);
     }
 
     @Test
-    @DisplayName("generatePdf() throws when xmlContent is null")
-    void testGeneratePdf_NullXmlContent_Throws() {
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, null, MINIMAL_JSON))
+    @DisplayName("generatePdf() throws when signedXml is null")
+    void generatePdf_nullSignedXml_throws() {
+        assertThatThrownBy(() -> service.generatePdf(DOC_NUMBER, null))
                 .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("xmlContent (signed XML) is null or blank");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
+                .hasMessageContaining("signedXml is null or blank");
+        verifyNoInteractions(fopPdfGenerator, pdfA3Converter);
     }
 
     @Test
-    @DisplayName("generatePdf() throws when xmlContent is blank")
-    void testGeneratePdf_BlankXmlContent_Throws() {
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, "   ", MINIMAL_JSON))
+    @DisplayName("generatePdf() throws when signedXml is blank")
+    void generatePdf_blankSignedXml_throws() {
+        assertThatThrownBy(() -> service.generatePdf(DOC_NUMBER, "   "))
                 .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("xmlContent (signed XML) is null or blank");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
+                .hasMessageContaining("signedXml is null or blank");
+        verifyNoInteractions(fopPdfGenerator, pdfA3Converter);
     }
 
     @Test
-    @DisplayName("generatePdf() throws when taxInvoiceDataJson is null")
-    void testGeneratePdf_NullJson_Throws() {
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, null))
+    @DisplayName("generatePdf() throws when GrandTotalAmount is missing")
+    void generatePdf_missingGrandTotal_throws() {
+        assertThatThrownBy(() -> service.generatePdf(DOC_NUMBER, SIGNED_XML_NO_GRAND_TOTAL))
                 .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("taxInvoiceDataJson is null");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
+                .hasMessageContaining("GrandTotalAmount");
+        verifyNoInteractions(fopPdfGenerator, pdfA3Converter);
     }
 
     @Test
-    @DisplayName("generatePdf() throws when taxInvoiceDataJson exceeds max size")
-    void testGeneratePdf_JsonExceedsMaxSize_Throws() {
-        // Create JSON that exceeds the 1MB (1048576 bytes) limit
-        String largeJson = "{\"data\":\"" + "X".repeat(1048577) + "\"}";
-
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, largeJson))
-                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("taxInvoiceDataJson exceeds max allowed size")
-                .hasMessageContaining("1048588 chars > 1048576");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
-    }
-
-    private static final String TAX_INVOICE_NUMBER = "TXINV-2024-001";
-    private static final String XML_CONTENT = "<TaxInvoice>signed</TaxInvoice>";
-    private static final String MINIMAL_JSON = """
-            {
-              "seller": { "name": "Seller Co.", "taxId": "1234567890" },
-              "buyer":  { "name": "Buyer Co.",  "taxId": "0987654321" }
-            }
-            """;
-    private static final String FULL_JSON = """
-            {
-              "taxInvoiceNumber": "TXINV-2024-001",
-              "taxInvoiceDate": "2024-01-15",
-              "seller": { "name": "Seller Co.", "taxId": "1234567890" },
-              "buyer":  { "name": "Buyer Co.",  "taxId": "0987654321" },
-              "lineItems": [
-                { "description": "Service", "quantity": "1", "unitPrice": "100", "amount": "100" }
-              ],
-              "subtotal": "100", "vatRate": "7", "vatAmount": "7", "grandTotal": "107"
-            }
-            """;
-
-    @Test
-    @DisplayName("generatePdf() calls FOP then PDFBox and returns PDF/A-3 bytes")
-    void testGeneratePdf_Success() throws Exception {
+    @DisplayName("generatePdf() extracts grand total and passes amountInWords param to FOP")
+    void generatePdf_success_passesAmountInWordsToFop() throws Exception {
         byte[] basePdf = new byte[2000];
-        byte[] pdfA3  = new byte[3000];
-
-        when(fopPdfGenerator.generatePdf(anyString())).thenReturn(basePdf);
-        when(pdfA3Converter.convertToPdfA3(eq(basePdf), eq(XML_CONTENT), anyString(), eq(TAX_INVOICE_NUMBER)))
+        byte[] pdfA3   = new byte[3000];
+        when(fopPdfGenerator.generatePdf(eq(SIGNED_XML), any())).thenReturn(basePdf);
+        when(pdfA3Converter.convertToPdfA3(eq(basePdf), eq(SIGNED_XML), anyString(), eq(DOC_NUMBER)))
                 .thenReturn(pdfA3);
 
-        byte[] result = service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, FULL_JSON);
+        byte[] result = service.generatePdf(DOC_NUMBER, SIGNED_XML);
 
         assertThat(result).isSameAs(pdfA3);
-        verify(fopPdfGenerator).generatePdf(anyString());
-        verify(pdfA3Converter).convertToPdfA3(eq(basePdf), eq(XML_CONTENT),
-                eq("taxinvoice-" + TAX_INVOICE_NUMBER + ".xml"), eq(TAX_INVOICE_NUMBER));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> paramsCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(fopPdfGenerator).generatePdf(eq(SIGNED_XML), paramsCaptor.capture());
+        assertThat(paramsCaptor.getValue()).containsKey("amountInWords");
+        // 1070.00 = หนึ่งพันเจ็ดสิบบาทถ้วน
+        assertThat(paramsCaptor.getValue().get("amountInWords"))
+                .isEqualTo("หนึ่งพันเจ็ดสิบบาทถ้วน");
     }
 
     @Test
-    @DisplayName("generatePdf() with minimal valid JSON (seller + buyer) still produces XML")
-    void testGeneratePdf_MinimalJson() throws Exception {
-        byte[] basePdf = new byte[500];
-        when(fopPdfGenerator.generatePdf(anyString())).thenReturn(basePdf);
-        when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any()))
-                .thenReturn(new byte[600]);
+    @DisplayName("generatePdf() passes signed XML unmodified to PdfA3Converter for embedding")
+    void generatePdf_success_embedsSignedXmlUnmodified() throws Exception {
+        when(fopPdfGenerator.generatePdf(any(), any())).thenReturn(new byte[100]);
+        when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any())).thenReturn(new byte[200]);
 
-        // Minimal valid JSON with required seller + buyer fields — should succeed
-        service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, MINIMAL_JSON);
+        service.generatePdf(DOC_NUMBER, SIGNED_XML);
 
-        ArgumentCaptor<String> xmlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(fopPdfGenerator).generatePdf(xmlCaptor.capture());
-        assertThat(xmlCaptor.getValue())
-                .contains("<taxInvoice>")
-                .contains(TAX_INVOICE_NUMBER);
+        verify(pdfA3Converter).convertToPdfA3(any(), eq(SIGNED_XML),
+                eq("taxinvoice-" + DOC_NUMBER + ".xml"), eq(DOC_NUMBER));
     }
 
     @Test
-    @DisplayName("generatePdf() throws TaxInvoicePdfGenerationException when taxInvoiceDataJson is invalid JSON")
-    void testGeneratePdf_InvalidJson_Throws() {
-        // Invalid JSON must fail fast during JSON parsing — no silent degradation to a blank PDF
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, "not-valid-json"))
-                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class);
+    @DisplayName("generatePdf() wraps FopPdfGenerationException")
+    void generatePdf_fopFails_wrapsException() throws Exception {
+        when(fopPdfGenerator.generatePdf(any(), any()))
+                .thenThrow(new FopTaxInvoicePdfGenerator.PdfGenerationException("XSL failed"));
 
-        // FOP and PDFBox are not called due to JSON parsing failure
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
-    }
-
-    @Test
-    @DisplayName("generatePdf() with full JSON passes structured XML to FOP")
-    void testGeneratePdf_FullJson_XmlStructure() throws Exception {
-        when(fopPdfGenerator.generatePdf(anyString())).thenReturn(new byte[1]);
-        when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any())).thenReturn(new byte[1]);
-
-        service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, FULL_JSON);
-
-        ArgumentCaptor<String> xmlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(fopPdfGenerator).generatePdf(xmlCaptor.capture());
-        String xml = xmlCaptor.getValue();
-        assertThat(xml)
-                .contains("<seller>")
-                .contains("<buyer>")
-                .contains("<lineItems>")
-                .contains("Seller Co.")
-                .contains("grandTotal");
-    }
-
-    @Test
-    @DisplayName("generatePdf() wraps FopPdfGenerationException in TaxInvoicePdfGenerationException")
-    void testGeneratePdf_FopFails() throws Exception {
-        when(fopPdfGenerator.generatePdf(anyString()))
-                .thenThrow(new FopTaxInvoicePdfGenerator.PdfGenerationException("XSL transform failed"));
-
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, MINIMAL_JSON))
+        assertThatThrownBy(() -> service.generatePdf(DOC_NUMBER, SIGNED_XML))
                 .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
                 .hasMessageContaining("PDF generation failed");
-
         verifyNoInteractions(pdfA3Converter);
     }
 
     @Test
-    @DisplayName("generatePdf() wraps PdfConversionException in TaxInvoicePdfGenerationException")
-    void testGeneratePdf_PdfA3ConversionFails() throws Exception {
-        when(fopPdfGenerator.generatePdf(anyString())).thenReturn(new byte[100]);
+    @DisplayName("generatePdf() wraps PdfConversionException")
+    void generatePdf_pdfA3Fails_wrapsException() throws Exception {
+        when(fopPdfGenerator.generatePdf(any(), any())).thenReturn(new byte[100]);
         when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any()))
-                .thenThrow(new PdfA3Converter.PdfConversionException("ICC profile missing"));
+                .thenThrow(new PdfA3Converter.PdfConversionException("ICC missing"));
 
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, MINIMAL_JSON))
+        assertThatThrownBy(() -> service.generatePdf(DOC_NUMBER, SIGNED_XML))
                 .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
                 .hasMessageContaining("PDF/A-3 conversion failed");
-    }
-
-    @Test
-    @DisplayName("generatePdf() escapes XML special characters in JSON values")
-    void testGeneratePdf_XmlEscaping() throws Exception {
-        String jsonWithSpecialChars = """
-                {
-                  "taxInvoiceNumber": "TXINV&001",
-                  "seller": { "name": "A & B <Corp>", "taxId": "1234567890" },
-                  "buyer":  { "name": "Buyer Co.", "taxId": "0987654321" }
-                }
-                """;
-
-        when(fopPdfGenerator.generatePdf(anyString())).thenReturn(new byte[1]);
-        when(pdfA3Converter.convertToPdfA3(any(), any(), any(), any())).thenReturn(new byte[1]);
-
-        service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithSpecialChars);
-
-        ArgumentCaptor<String> xmlCaptor = ArgumentCaptor.forClass(String.class);
-        verify(fopPdfGenerator).generatePdf(xmlCaptor.capture());
-        String xml = xmlCaptor.getValue();
-        assertThat(xml)
-                .doesNotContain("A & B")
-                .contains("&amp;")
-                .contains("&lt;");
-    }
-
-    @Test
-    @DisplayName("generatePdf() throws when seller field is missing from JSON")
-    void testGeneratePdf_MissingSellerField_Throws() {
-        // JSON without seller field - should fail fast before FOP processing
-        String jsonWithoutSeller = """
-                {
-                  "taxInvoiceNumber": "TXINV-001",
-                  "buyer": { "name": "Buyer Co.", "taxId": "0987654321" }
-                }
-                """;
-
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithoutSeller))
-                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("missing required field 'seller'");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
-    }
-
-    @Test
-    @DisplayName("generatePdf() throws when seller field is null in JSON")
-    void testGeneratePdf_NullSellerField_Throws() {
-        // JSON with null seller field - should fail fast before FOP processing
-        String jsonWithNullSeller = """
-                {
-                  "taxInvoiceNumber": "TXINV-001",
-                  "seller": null,
-                  "buyer": { "name": "Buyer Co.", "taxId": "0987654321" }
-                }
-                """;
-
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithNullSeller))
-                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("missing required field 'seller'");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
-    }
-
-    @Test
-    @DisplayName("generatePdf() throws when buyer field is missing from JSON")
-    void testGeneratePdf_MissingBuyerField_Throws() {
-        // JSON without buyer field - should fail fast before FOP processing
-        String jsonWithoutBuyer = """
-                {
-                  "taxInvoiceNumber": "TXINV-001",
-                  "seller": { "name": "Seller Co.", "taxId": "1234567890" }
-                }
-                """;
-
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithoutBuyer))
-                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("missing required field 'buyer'");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
-    }
-
-    @Test
-    @DisplayName("generatePdf() throws when buyer field is null in JSON")
-    void testGeneratePdf_NullBuyerField_Throws() {
-        // JSON with null buyer field - should fail fast before FOP processing
-        String jsonWithNullBuyer = """
-                {
-                  "taxInvoiceNumber": "TXINV-001",
-                  "seller": { "name": "Seller Co.", "taxId": "1234567890" },
-                  "buyer": null
-                }
-                """;
-
-        assertThatThrownBy(() ->
-                service.generatePdf(TAX_INVOICE_NUMBER, XML_CONTENT, jsonWithNullBuyer))
-                .isInstanceOf(TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException.class)
-                .hasMessageContaining("missing required field 'buyer'");
-
-        verifyNoInteractions(fopPdfGenerator);
-        verifyNoInteractions(pdfA3Converter);
     }
 }

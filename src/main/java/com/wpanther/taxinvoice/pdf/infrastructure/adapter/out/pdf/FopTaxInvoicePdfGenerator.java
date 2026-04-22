@@ -27,6 +27,7 @@ import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -47,7 +48,7 @@ import java.util.concurrent.TimeUnit;
 public class FopTaxInvoicePdfGenerator {
 
     private static final String FOP_CONFIG_PATH = "fop/fop.xconf";
-    private static final String TAXINVOICE_XSL_PATH = "xsl/taxinvoice.xsl";
+    private static final String TAXINVOICE_XSL_PATH = "xsl/taxinvoice-direct.xsl";
 
     private static final List<String> REQUIRED_FONTS = List.of(
             "fonts/THSarabunNew.ttf",
@@ -163,14 +164,18 @@ public class FopTaxInvoicePdfGenerator {
     }
 
     /**
-     * Generate PDF from XML data using the tax invoice XSL-FO template.
+     * Generate PDF from signed XML data using the tax invoice XSL-FO template.
+     * Sets each entry in {@code params} as an XSLT parameter on the transformer
+     * before rendering. Use {@code Map.of("amountInWords", "...")} to supply the
+     * Thai baht words value.
      *
-     * @param xmlData The XML representation of tax invoice data
+     * @param xmlData The signed XML (rsm:TaxInvoice_CrossIndustryInvoice)
+     * @param params  XSLT parameters to set on the transformer (may be null)
      * @return PDF bytes
      * @throws PdfGenerationException if generation fails
      */
     @NewSpan("pdf.fop.render")
-    public byte[] generatePdf(String xmlData) throws PdfGenerationException {
+    public byte[] generatePdf(String xmlData, Map<String, Object> params) throws PdfGenerationException {
         log.debug("Awaiting render permit (available={})", renderSemaphore.availablePermits());
         try {
             renderSemaphore.acquire();
@@ -181,13 +186,14 @@ public class FopTaxInvoicePdfGenerator {
         long t0 = System.nanoTime();
         try {
             log.debug("Generating PDF with cached template: {}", TAXINVOICE_XSL_PATH);
-            return renderPdf(xmlData, cachedTemplates.newTransformer());
+            Transformer transformer = cachedTemplates.newTransformer();
+            if (params != null) {
+                params.forEach(transformer::setParameter);
+            }
+            return renderPdf(xmlData, transformer);
         } catch (javax.xml.transform.TransformerConfigurationException e) {
             throw new PdfGenerationException("Failed to create transformer from cached templates: " + e.getMessage(), e);
         } finally {
-            // Nested finally: record the timer first, then always release the permit.
-            // If record() itself throws (e.g. Micrometer backend unavailable), the
-            // release() must still run — otherwise the permit leaks and FOP halts.
             try {
                 renderTimer.record(System.nanoTime() - t0, TimeUnit.NANOSECONDS);
             } finally {
@@ -197,38 +203,10 @@ public class FopTaxInvoicePdfGenerator {
     }
 
     /**
-     * Generate PDF from XML data using a specified XSL-FO template.
-     * Uses the cached {@link Templates} for the default path; compiles on demand otherwise.
-     *
-     * @param xmlData The XML representation of tax invoice data
-     * @param xslPath Path to the XSL-FO template (classpath resource)
-     * @return PDF bytes
-     * @throws PdfGenerationException if generation fails
+     * Convenience overload — delegates to {@link #generatePdf(String, Map)} with no params.
      */
-    public byte[] generatePdf(String xmlData, String xslPath) throws PdfGenerationException {
-        if (TAXINVOICE_XSL_PATH.equals(xslPath)) {
-            return generatePdf(xmlData);
-        }
-        log.debug("Generating PDF with template: {}", xslPath);
-        // Create a new TransformerFactory for this on-demand compilation.
-        // This method is not performance-critical (alternative template path),
-        // so the overhead of creating a new TransformerFactory is acceptable.
-        TransformerFactory tf = TransformerFactory.newInstance();
-        try {
-            ClassPathResource xslResource = new ClassPathResource(xslPath);
-            if (!xslResource.exists()) {
-                throw new PdfGenerationException("XSL template not found: " + xslPath);
-            }
-            try (InputStream is = xslResource.getInputStream()) {
-                Transformer transformer = tf.newTransformer(new StreamSource(is));
-                return renderPdf(xmlData, transformer);
-            }
-        } catch (PdfGenerationException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to generate PDF", e);
-            throw new PdfGenerationException("PDF generation failed: " + e.getMessage(), e);
-        }
+    public byte[] generatePdf(String xmlData) throws PdfGenerationException {
+        return generatePdf(xmlData, null);
     }
 
     private byte[] renderPdf(String xmlData, Transformer transformer) throws PdfGenerationException {

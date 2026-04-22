@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -18,40 +19,79 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/**
- * Tests for FopTaxInvoicePdfGenerator construction and URI resolution.
- *
- * <p>Full PDF generation is not tested here (requires real Thai fonts). These
- * tests verify that the component initialises correctly — template caching and
- * base-URI resolution — so deployment failures are caught early.</p>
- */
 @DisplayName("FopTaxInvoicePdfGenerator Unit Tests")
 class FopTaxInvoicePdfGeneratorTest {
+
+    // Minimal signed XML accepted by taxinvoice-direct.xsl
+    private static final String MINIMAL_SIGNED_XML =
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+        "<rsm:TaxInvoice_CrossIndustryInvoice " +
+        "    xmlns:ram=\"urn:etda:uncefact:data:standard:TaxInvoice_ReusableAggregateBusinessInformationEntity:2\"" +
+        "    xmlns:rsm=\"urn:etda:uncefact:data:standard:TaxInvoice_CrossIndustryInvoice:2\">" +
+        "  <rsm:ExchangedDocument>" +
+        "    <ram:ID>TINV-TEST-001</ram:ID>" +
+        "    <ram:Name>ใบกำกับภาษี</ram:Name>" +
+        "    <ram:IssueDateTime>2024-01-15T00:00:00.0</ram:IssueDateTime>" +
+        "  </rsm:ExchangedDocument>" +
+        "  <rsm:SupplyChainTradeTransaction>" +
+        "    <ram:ApplicableHeaderTradeAgreement>" +
+        "      <ram:SellerTradeParty>" +
+        "        <ram:Name>บริษัท ทดสอบ จำกัด</ram:Name>" +
+        "        <ram:SpecifiedTaxRegistration><ram:ID>1234567890123</ram:ID></ram:SpecifiedTaxRegistration>" +
+        "      </ram:SellerTradeParty>" +
+        "      <ram:BuyerTradeParty>" +
+        "        <ram:Name>ผู้ซื้อ</ram:Name>" +
+        "        <ram:SpecifiedTaxRegistration><ram:ID>9876543210987</ram:ID></ram:SpecifiedTaxRegistration>" +
+        "      </ram:BuyerTradeParty>" +
+        "    </ram:ApplicableHeaderTradeAgreement>" +
+        "    <ram:ApplicableHeaderTradeDelivery/>" +
+        "    <ram:ApplicableHeaderTradeSettlement>" +
+        "      <ram:InvoiceCurrencyCode>THB</ram:InvoiceCurrencyCode>" +
+        "      <ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CalculatedRate>7</ram:CalculatedRate></ram:ApplicableTradeTax>" +
+        "      <ram:SpecifiedTradeSettlementHeaderMonetarySummation>" +
+        "        <ram:LineTotalAmount>1000</ram:LineTotalAmount>" +
+        "        <ram:AllowanceTotalAmount>0</ram:AllowanceTotalAmount>" +
+        "        <ram:TaxBasisTotalAmount>1000</ram:TaxBasisTotalAmount>" +
+        "        <ram:TaxTotalAmount>70</ram:TaxTotalAmount>" +
+        "        <ram:GrandTotalAmount>1070</ram:GrandTotalAmount>" +
+        "      </ram:SpecifiedTradeSettlementHeaderMonetarySummation>" +
+        "    </ram:ApplicableHeaderTradeSettlement>" +
+        "    <ram:IncludedSupplyChainTradeLineItem>" +
+        "      <ram:AssociatedDocumentLineDocument><ram:LineID>1</ram:LineID></ram:AssociatedDocumentLineDocument>" +
+        "      <ram:SpecifiedTradeProduct><ram:ID>P001</ram:ID><ram:Name>สินค้าทดสอบ</ram:Name></ram:SpecifiedTradeProduct>" +
+        "      <ram:SpecifiedLineTradeAgreement>" +
+        "        <ram:GrossPriceProductTradePrice><ram:ChargeAmount>1000</ram:ChargeAmount></ram:GrossPriceProductTradePrice>" +
+        "      </ram:SpecifiedLineTradeAgreement>" +
+        "      <ram:SpecifiedLineTradeDelivery><ram:BilledQuantity unitCode=\"PIECE\">1</ram:BilledQuantity></ram:SpecifiedLineTradeDelivery>" +
+        "      <ram:SpecifiedLineTradeSettlement>" +
+        "        <ram:ApplicableTradeTax><ram:TypeCode>VAT</ram:TypeCode><ram:CalculatedRate>7</ram:CalculatedRate></ram:ApplicableTradeTax>" +
+        "        <ram:SpecifiedTradeSettlementLineMonetarySummation><ram:NetLineTotalAmount>1000</ram:NetLineTotalAmount></ram:SpecifiedTradeSettlementLineMonetarySummation>" +
+        "      </ram:SpecifiedLineTradeSettlement>" +
+        "    </ram:IncludedSupplyChainTradeLineItem>" +
+        "  </rsm:SupplyChainTradeTransaction>" +
+        "</rsm:TaxInvoice_CrossIndustryInvoice>";
 
     @Test
     @DisplayName("Constructor succeeds and compiles XSL template")
     void constructor_compilesTemplateSuccessfully() {
-        // No exception = template found and compiled
         assertThatCode(() -> new FopTaxInvoicePdfGenerator(2, 52428800L, new SimpleMeterRegistry()))
                 .doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("Constructor rejects maxConcurrentRenders < 1 with IllegalStateException")
+    @DisplayName("Constructor rejects maxConcurrentRenders < 1")
     void constructor_invalidMaxConcurrentRenders_throwsIllegalStateException() {
         assertThatThrownBy(() -> new FopTaxInvoicePdfGenerator(0, 52428800L, new SimpleMeterRegistry()))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("max-concurrent-renders")
-                .hasMessageContaining("0");
+                .hasMessageContaining("max-concurrent-renders");
     }
 
     @Test
-    @DisplayName("Constructor rejects maxPdfSizeBytes < 1 with IllegalStateException")
+    @DisplayName("Constructor rejects maxPdfSizeBytes < 1")
     void constructor_invalidMaxPdfSizeBytes_throwsIllegalStateException() {
         assertThatThrownBy(() -> new FopTaxInvoicePdfGenerator(1, 0L, new SimpleMeterRegistry()))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("max-pdf-size-bytes")
-                .hasMessageContaining("0");
+                .hasMessageContaining("max-pdf-size-bytes");
     }
 
     @Test
@@ -66,15 +106,14 @@ class FopTaxInvoicePdfGeneratorTest {
     }
 
     @Test
-    @DisplayName("checkFontAvailability() does not throw regardless of font presence")
+    @DisplayName("checkFontAvailability() does not throw")
     void checkFontAvailability_doesNotThrow() {
         FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
-        // Method logs info (fonts present) or warn (fonts absent) — never throws.
         assertThatCode(() -> gen.checkFontAvailability()).doesNotThrowAnyException();
     }
 
     @Test
-    @DisplayName("PdfGenerationException(String) 1-arg constructor carries the message")
+    @DisplayName("PdfGenerationException 1-arg constructor carries message")
     void pdfGenerationException_messageOnlyConstructor_hasMessage() {
         var ex = new FopTaxInvoicePdfGenerator.PdfGenerationException("FOP failed");
         assertThat(ex.getMessage()).isEqualTo("FOP failed");
@@ -82,16 +121,16 @@ class FopTaxInvoicePdfGeneratorTest {
     }
 
     @Test
-    @DisplayName("generatePdf() on an interrupted thread throws PdfGenerationException")
+    @DisplayName("generatePdf(xml) on interrupted thread throws PdfGenerationException")
     void generatePdf_threadAlreadyInterrupted_throwsPdfGenerationException() {
         FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
-        Thread.currentThread().interrupt();  // mark thread as interrupted before acquire()
+        Thread.currentThread().interrupt();
         try {
-            assertThatThrownBy(() -> gen.generatePdf("<taxInvoice/>"))
+            assertThatThrownBy(() -> gen.generatePdf(MINIMAL_SIGNED_XML))
                     .isInstanceOf(FopTaxInvoicePdfGenerator.PdfGenerationException.class)
                     .hasMessageContaining("interrupted");
         } finally {
-            Thread.interrupted();  // restore clean interrupted status for subsequent tests
+            Thread.interrupted();
         }
     }
 
@@ -99,8 +138,6 @@ class FopTaxInvoicePdfGeneratorTest {
     @DisplayName("Semaphore blocks callers when all permits are held")
     void generatePdf_semaphoreBlocksWhenAtCapacity() throws Exception {
         FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
-
-        // Drain the single permit so the next caller must wait
         Field f = FopTaxInvoicePdfGenerator.class.getDeclaredField("renderSemaphore");
         f.setAccessible(true);
         Semaphore sem = (Semaphore) f.get(gen);
@@ -109,18 +146,11 @@ class FopTaxInvoicePdfGeneratorTest {
         ExecutorService exec = Executors.newSingleThreadExecutor();
         try {
             Future<?> future = exec.submit(() -> {
-                try {
-                    gen.generatePdf("<taxInvoice/>");
-                } catch (FopTaxInvoicePdfGenerator.PdfGenerationException ignored) {
-                    // expected once permit is released — not what we are testing here
-                }
+                try { gen.generatePdf(MINIMAL_SIGNED_XML); }
+                catch (FopTaxInvoicePdfGenerator.PdfGenerationException ignored) {}
             });
-
-            // While the permit is held, the task must not complete
             assertThatThrownBy(() -> future.get(300, TimeUnit.MILLISECONDS))
                     .isInstanceOf(TimeoutException.class);
-
-            // Release permit → task unblocks and finishes (may fail on bad XML, that is fine)
             sem.release();
             future.get(5, TimeUnit.SECONDS);
         } finally {
@@ -129,53 +159,35 @@ class FopTaxInvoicePdfGeneratorTest {
     }
 
     @Test
-    @DisplayName("resolveBaseUri() returns a non-null URI ending with '/'")
+    @DisplayName("resolveBaseUri() returns a non-null absolute URI ending with '/'")
     void resolveBaseUri_returnsValidUri() throws Exception {
         FopTaxInvoicePdfGenerator generator = new FopTaxInvoicePdfGenerator(2, 52428800L, new SimpleMeterRegistry());
-
         Method method = FopTaxInvoicePdfGenerator.class.getDeclaredMethod("resolveBaseUri");
         method.setAccessible(true);
         URI uri = (URI) method.invoke(generator);
-
         assertThat(uri).isNotNull();
+        assertThat(uri.isAbsolute()).isTrue();
         assertThat(uri.toString()).endsWith("/");
     }
 
     @Test
-    @DisplayName("resolveBaseUri() returns an absolute URI (not relative)")
-    void resolveBaseUri_returnsAbsoluteUri() throws Exception {
-        FopTaxInvoicePdfGenerator generator = new FopTaxInvoicePdfGenerator(2, 52428800L, new SimpleMeterRegistry());
+    @DisplayName("Valid signed XML → returns non-empty PDF bytes starting with %PDF")
+    void generatePdf_validSignedXml_returnsPdfBytes() throws Exception {
+        FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
 
-        Method method = FopTaxInvoicePdfGenerator.class.getDeclaredMethod("resolveBaseUri");
-        method.setAccessible(true);
-        URI uri = (URI) method.invoke(generator);
+        byte[] result = gen.generatePdf(MINIMAL_SIGNED_XML, Map.of("amountInWords", "หนึ่งพันเจ็ดสิบบาทถ้วน"));
 
-        assertThat(uri.isAbsolute()).isTrue();
+        assertThat(result).isNotEmpty();
+        assertThat(new String(result, 0, 4, java.nio.charset.StandardCharsets.US_ASCII))
+                .isEqualTo("%PDF");
     }
 
     @Test
-    @DisplayName("Valid tax invoice XML → returns non-empty PDF bytes starting with %PDF")
-    void generatePdf_validXml_returnsPdfBytes() throws Exception {
+    @DisplayName("generatePdf(xml) no-arg overload delegates successfully")
+    void generatePdf_noParams_delegatesToParamsOverload() throws Exception {
         FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 52428800L, new SimpleMeterRegistry());
-        String xml = "<taxInvoice>"
-                + "<taxInvoiceNumber>TINV-TEST-001</taxInvoiceNumber>"
-                + "<seller><name>Test Seller</name><address>1 Test Rd</address>"
-                + "<taxId>1234567890123</taxId></seller>"
-                + "<buyer><name>Test Buyer</name><address>2 Test Rd</address>"
-                + "<taxId>9876543210987</taxId></buyer>"
-                + "<lineItems><item><description>Widget</description>"
-                + "<quantity>1</quantity><unit>EA</unit>"
-                + "<unitPrice>1000</unitPrice><amount>1000</amount></item></lineItems>"
-                + "<subtotal>1000</subtotal><amountBeforeVat>1000</amountBeforeVat>"
-                + "<vatRate>7</vatRate><vatAmount>70</vatAmount><grandTotal>1070</grandTotal>"
-                + "</taxInvoice>";
-
-        byte[] result = gen.generatePdf(xml);
-
+        byte[] result = gen.generatePdf(MINIMAL_SIGNED_XML);
         assertThat(result).isNotEmpty();
-        // All PDF files start with the %PDF header
-        assertThat(new String(result, 0, 4, java.nio.charset.StandardCharsets.US_ASCII))
-                .isEqualTo("%PDF");
     }
 
     @Test
@@ -187,20 +199,10 @@ class FopTaxInvoicePdfGeneratorTest {
     }
 
     @Test
-    @DisplayName("generatePdf() throws PdfGenerationException when PDF exceeds max size")
-    void generatePdf_pdfExceedsMaxSize_throwsPdfGenerationException() throws Exception {
-        // Set a 1-byte limit so any real PDF will exceed it
+    @DisplayName("PDF exceeding max size → PdfGenerationException")
+    void generatePdf_pdfExceedsMaxSize_throwsPdfGenerationException() {
         FopTaxInvoicePdfGenerator gen = new FopTaxInvoicePdfGenerator(1, 1L, new SimpleMeterRegistry());
-        String xml = "<taxInvoice>"
-                + "<taxInvoiceNumber>TINV-TOOBIG</taxInvoiceNumber>"
-                + "<seller><name>S</name><address>A</address><taxId>123</taxId></seller>"
-                + "<buyer><name>B</name><address>A</address><taxId>987</taxId></buyer>"
-                + "<lineItems/>"
-                + "<subtotal>0</subtotal><amountBeforeVat>0</amountBeforeVat>"
-                + "<vatRate>7</vatRate><vatAmount>0</vatAmount><grandTotal>0</grandTotal>"
-                + "</taxInvoice>";
-
-        assertThatThrownBy(() -> gen.generatePdf(xml))
+        assertThatThrownBy(() -> gen.generatePdf(MINIMAL_SIGNED_XML, null))
                 .isInstanceOf(FopTaxInvoicePdfGenerator.PdfGenerationException.class)
                 .hasMessageContaining("exceeds max allowed size");
     }

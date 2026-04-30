@@ -37,6 +37,4 @@ public class CompensateTaxInvoicePdfCommand extends SagaCommand {
         super(sagaId, sagaStep, correlationId);
         this.documentId = Objects.requireNonNull(documentId, "documentId is required");
     }
-
-    public String getDocumentId() { return documentId; }
 }

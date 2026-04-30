@@ -1,4 +1,4 @@
-package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging;
+package com.wpanther.taxinvoice.pdf.application.dto.event;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;

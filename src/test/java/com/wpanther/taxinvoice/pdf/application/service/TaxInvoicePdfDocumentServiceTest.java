@@ -6,7 +6,7 @@ import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
+import com.wpanther.taxinvoice.pdf.application.dto.event.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.infrastructure.metrics.PdfGenerationMetrics;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

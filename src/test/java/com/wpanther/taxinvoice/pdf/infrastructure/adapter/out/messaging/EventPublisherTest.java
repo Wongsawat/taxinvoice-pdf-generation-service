@@ -3,6 +3,7 @@ package com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wpanther.saga.infrastructure.outbox.OutboxService;
+import com.wpanther.taxinvoice.pdf.application.dto.event.TaxInvoicePdfGeneratedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

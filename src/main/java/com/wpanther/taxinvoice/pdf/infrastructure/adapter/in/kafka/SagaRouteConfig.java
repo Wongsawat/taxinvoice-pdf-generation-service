@@ -5,6 +5,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.pdf.application.port.in.CompensateTaxInvoicePdfUseCase;
 import com.wpanther.taxinvoice.pdf.application.port.in.ProcessTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.dto.CompensateTaxInvoicePdfCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.dto.ProcessTaxInvoicePdfCommand;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
@@ -66,12 +68,12 @@ public class SagaRouteConfig extends RouteBuilder {
                         .onPrepareFailure(exchange -> {
                             Throwable cause = exchange.getProperty(Exchange.EXCEPTION_CAUGHT, Throwable.class);
                             Object body = exchange.getIn().getBody();
-                            if (body instanceof KafkaTaxInvoiceProcessCommand cmd) {
+                            if (body instanceof ProcessTaxInvoicePdfCommand cmd) {
                                 log.error("DLQ: notifying orchestrator of retry exhaustion for saga {} document {}",
                                         cmd.getSagaId(), cmd.getDocumentNumber());
                                 sagaCommandHandler.publishOrchestrationFailure(
                                         cmd.getSagaId(), cmd.getSagaStep(), cmd.getCorrelationId(), cause);
-                            } else if (body instanceof KafkaTaxInvoiceCompensateCommand cmd) {
+                            } else if (body instanceof CompensateTaxInvoicePdfCommand cmd) {
                                 log.error("DLQ: notifying orchestrator of compensation retry exhaustion for saga {} document {}",
                                         cmd.getSagaId(), cmd.getDocumentId());
                                 sagaCommandHandler.publishCompensationOrchestrationFailure(
@@ -98,10 +100,10 @@ public class SagaRouteConfig extends RouteBuilder {
                         + "&maxPollRecords={{app.kafka.consumer.max-poll-records:100}}"
                         + "&consumersCount={{app.kafka.consumer.consumers-count:3}}")
                 .routeId("saga-command-consumer")
-                .unmarshal().json(JsonLibrary.Jackson, KafkaTaxInvoiceProcessCommand.class)
+                .unmarshal().json(JsonLibrary.Jackson, ProcessTaxInvoicePdfCommand.class)
                 .process(exchange -> {
-                        KafkaTaxInvoiceProcessCommand cmd =
-                                exchange.getIn().getBody(KafkaTaxInvoiceProcessCommand.class);
+                        ProcessTaxInvoicePdfCommand cmd =
+                                exchange.getIn().getBody(ProcessTaxInvoicePdfCommand.class);
                         log.info("Processing saga command for saga: {}, document: {}",
                                         cmd.getSagaId(), cmd.getDocumentNumber());
                         processUseCase.handle(
@@ -126,10 +128,10 @@ public class SagaRouteConfig extends RouteBuilder {
                         + "&maxPollRecords={{app.kafka.consumer.max-poll-records:100}}"
                         + "&consumersCount={{app.kafka.consumer.consumers-count:3}}")
                 .routeId("saga-compensation-consumer")
-                .unmarshal().json(JsonLibrary.Jackson, KafkaTaxInvoiceCompensateCommand.class)
+                .unmarshal().json(JsonLibrary.Jackson, CompensateTaxInvoicePdfCommand.class)
                 .process(exchange -> {
-                        KafkaTaxInvoiceCompensateCommand cmd =
-                                exchange.getIn().getBody(KafkaTaxInvoiceCompensateCommand.class);
+                        CompensateTaxInvoicePdfCommand cmd =
+                                exchange.getIn().getBody(CompensateTaxInvoicePdfCommand.class);
                         log.info("Processing compensation for saga: {}, document: {}",
                                         cmd.getSagaId(), cmd.getDocumentId());
                         compensateUseCase.handle(

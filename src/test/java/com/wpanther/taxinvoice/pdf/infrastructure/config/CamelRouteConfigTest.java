@@ -3,11 +3,11 @@ package com.wpanther.taxinvoice.pdf.infrastructure.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.wpanther.saga.domain.enums.SagaStep;
-import com.wpanther.taxinvoice.pdf.application.service.SagaCommandHandler;
-import com.wpanther.taxinvoice.pdf.application.usecase.CompensateTaxInvoicePdfUseCase;
-import com.wpanther.taxinvoice.pdf.application.usecase.ProcessTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.application.port.in.CompensateTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.application.port.in.ProcessTaxInvoicePdfUseCase;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.SagaCommandHandler;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.SagaRouteConfig;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfReplyEvent;
@@ -22,6 +22,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/**
+ * Unit tests for JSON serialization/deserialization of Kafka command DTOs
+ * and event objects used in the Camel routes.
+ */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("CamelRouteConfig Unit Tests")
 class CamelRouteConfigTest {
@@ -137,7 +141,7 @@ class CamelRouteConfigTest {
     }
 
     @Test
-    @DisplayName("Should deserialize KafkaTaxInvoiceProcessCommand from JSON")
+    @DisplayName("Should deserialize KafkaTaxInvoiceProcessCommand from JSON with kebab-case sagaStep")
     void testProcessCommandDeserialization() throws Exception {
         // Given - sagaStep uses kebab-case code as serialized by SagaStep @JsonValue
         String json = """

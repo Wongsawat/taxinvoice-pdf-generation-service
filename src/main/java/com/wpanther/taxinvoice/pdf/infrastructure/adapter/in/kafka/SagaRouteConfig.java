@@ -3,9 +3,8 @@ package com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wpanther.saga.domain.enums.SagaStep;
-import com.wpanther.taxinvoice.pdf.application.service.SagaCommandHandler;
-import com.wpanther.taxinvoice.pdf.application.usecase.CompensateTaxInvoicePdfUseCase;
-import com.wpanther.taxinvoice.pdf.application.usecase.ProcessTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.application.port.in.CompensateTaxInvoicePdfUseCase;
+import com.wpanther.taxinvoice.pdf.application.port.in.ProcessTaxInvoicePdfUseCase;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
@@ -70,11 +69,13 @@ public class SagaRouteConfig extends RouteBuilder {
                             if (body instanceof KafkaTaxInvoiceProcessCommand cmd) {
                                 log.error("DLQ: notifying orchestrator of retry exhaustion for saga {} document {}",
                                         cmd.getSagaId(), cmd.getDocumentNumber());
-                                sagaCommandHandler.publishOrchestrationFailure(cmd, cause);
+                                sagaCommandHandler.publishOrchestrationFailure(
+                                        cmd.getSagaId(), cmd.getSagaStep(), cmd.getCorrelationId(), cause);
                             } else if (body instanceof KafkaTaxInvoiceCompensateCommand cmd) {
                                 log.error("DLQ: notifying orchestrator of compensation retry exhaustion for saga {} document {}",
                                         cmd.getSagaId(), cmd.getDocumentId());
-                                sagaCommandHandler.publishCompensationOrchestrationFailure(cmd, cause);
+                                sagaCommandHandler.publishCompensationOrchestrationFailure(
+                                        cmd.getSagaId(), cmd.getSagaStep(), cmd.getCorrelationId(), cause);
                             } else {
                                 // Body was never deserialized (e.g., malformed JSON, unknown enum).
                                 // Attempt to recover saga coordinates from the raw payload so the
@@ -103,7 +104,13 @@ public class SagaRouteConfig extends RouteBuilder {
                                 exchange.getIn().getBody(KafkaTaxInvoiceProcessCommand.class);
                         log.info("Processing saga command for saga: {}, document: {}",
                                         cmd.getSagaId(), cmd.getDocumentNumber());
-                        processUseCase.handle(cmd);
+                        processUseCase.handle(
+                                cmd.getDocumentId(),
+                                cmd.getDocumentNumber(),
+                                cmd.getSignedXmlUrl(),
+                                cmd.getSagaId(),
+                                cmd.getSagaStep(),
+                                cmd.getCorrelationId());
                 })
                 .log("Successfully processed saga command");
 
@@ -125,7 +132,11 @@ public class SagaRouteConfig extends RouteBuilder {
                                 exchange.getIn().getBody(KafkaTaxInvoiceCompensateCommand.class);
                         log.info("Processing compensation for saga: {}, document: {}",
                                         cmd.getSagaId(), cmd.getDocumentId());
-                        compensateUseCase.handle(cmd);
+                        compensateUseCase.handle(
+                                cmd.getDocumentId(),
+                                cmd.getSagaId(),
+                                cmd.getSagaStep(),
+                                cmd.getCorrelationId());
                 })
                 .log("Successfully processed compensation command");
     }

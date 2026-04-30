@@ -1,12 +1,11 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
+import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
 import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
-import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
 import com.wpanther.taxinvoice.pdf.domain.repository.TaxInvoicePdfDocumentRepository;
-import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
-import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.out.messaging.TaxInvoicePdfGeneratedEvent;
 import com.wpanther.taxinvoice.pdf.infrastructure.metrics.PdfGenerationMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,37 +74,33 @@ public class TaxInvoicePdfDocumentService {
     @Transactional
     public void completeGenerationAndPublish(UUID documentId, String s3Key, String fileUrl,
                                              long fileSize, int previousRetryCount,
-                                             KafkaTaxInvoiceProcessCommand command) {
+                                             String sagaId, SagaStep sagaStep, String correlationId,
+                                             String documentIdParam, String documentNumber) {
         TaxInvoicePdfDocument doc = requireDocument(documentId);
         doc.markCompleted(s3Key, fileUrl, fileSize);
         doc.markXmlEmbedded();
         applyRetryCount(doc, previousRetryCount);
         doc = repository.save(doc);
 
-        pdfEventPort.publishPdfGenerated(buildGeneratedEvent(doc, command));
-        sagaReplyPort.publishSuccess(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                doc.getDocumentUrl(), doc.getFileSize());
+        pdfEventPort.publishPdfGenerated(buildGeneratedEvent(doc, sagaId, documentIdParam, documentNumber, correlationId));
+        sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId, doc.getDocumentUrl(), doc.getFileSize());
 
-        log.info("Completed PDF generation for saga {} tax invoice {}",
-                command.getSagaId(), doc.getTaxInvoiceNumber());
+        log.info("Completed PDF generation for saga {} tax invoice {}", sagaId, doc.getTaxInvoiceNumber());
     }
 
     @Transactional
     public void failGenerationAndPublish(UUID documentId, String errorMessage,
                                          int previousRetryCount,
-                                         KafkaTaxInvoiceProcessCommand command) {
+                                         String sagaId, SagaStep sagaStep, String correlationId) {
         String safeError = errorMessage != null ? errorMessage : "PDF generation failed";
         TaxInvoicePdfDocument doc = requireDocument(documentId);
         doc.markFailed(safeError);
         applyRetryCount(doc, previousRetryCount);
         repository.save(doc);
 
-        sagaReplyPort.publishFailure(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), safeError);
+        sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, safeError);
 
-        log.warn("PDF generation failed for saga {} tax invoice {}: {}",
-                command.getSagaId(), doc.getTaxInvoiceNumber(), safeError);
+        log.warn("PDF generation failed for saga {} tax invoice {}: {}", sagaId, doc.getTaxInvoiceNumber(), safeError);
     }
 
     @Transactional
@@ -116,44 +111,33 @@ public class TaxInvoicePdfDocumentService {
 
     @Transactional
     public void publishIdempotentSuccess(TaxInvoicePdfDocument existing,
-                                         KafkaTaxInvoiceProcessCommand command) {
-        pdfEventPort.publishPdfGenerated(buildGeneratedEvent(existing, command));
-        sagaReplyPort.publishSuccess(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                existing.getDocumentUrl(), existing.getFileSize());
-        log.warn("Tax invoice PDF already generated for saga {} — re-publishing SUCCESS reply",
-                command.getSagaId());
+                                         String sagaId, SagaStep sagaStep, String correlationId) {
+        pdfEventPort.publishPdfGenerated(buildGeneratedEvent(existing, sagaId, existing.getTaxInvoiceId(), existing.getTaxInvoiceNumber(), correlationId));
+        sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId, existing.getDocumentUrl(), existing.getFileSize());
+        log.warn("Tax invoice PDF already generated for saga {} — re-publishing SUCCESS reply", sagaId);
     }
 
     @Transactional
-    public void publishRetryExhausted(KafkaTaxInvoiceProcessCommand command) {
-        pdfGenerationMetrics.recordRetryExhausted(
-                command.getSagaId(),
-                command.getDocumentId(),
-                command.getDocumentNumber());
-        sagaReplyPort.publishFailure(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(),
-                "Maximum retry attempts exceeded");
-        log.error("Max retries exceeded for saga {} document {}",
-                command.getSagaId(), command.getDocumentNumber());
+    public void publishRetryExhausted(String sagaId, SagaStep sagaStep, String correlationId,
+                                       String documentId, String documentNumber) {
+        pdfGenerationMetrics.recordRetryExhausted(sagaId, documentId, documentNumber);
+        sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, "Maximum retry attempts exceeded");
+        log.error("Max retries exceeded for saga {} document {}", sagaId, documentNumber);
     }
 
     @Transactional
-    public void publishGenerationFailure(KafkaTaxInvoiceProcessCommand command, String errorMessage) {
-        sagaReplyPort.publishFailure(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), errorMessage);
+    public void publishGenerationFailure(String sagaId, SagaStep sagaStep, String correlationId, String errorMessage) {
+        sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, errorMessage);
     }
 
     @Transactional
-    public void publishCompensated(KafkaTaxInvoiceCompensateCommand command) {
-        sagaReplyPort.publishCompensated(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId());
+    public void publishCompensated(String sagaId, SagaStep sagaStep, String correlationId) {
+        sagaReplyPort.publishCompensated(sagaId, sagaStep, correlationId);
     }
 
     @Transactional
-    public void publishCompensationFailure(KafkaTaxInvoiceCompensateCommand command, String error) {
-        sagaReplyPort.publishFailure(
-                command.getSagaId(), command.getSagaStep(), command.getCorrelationId(), error);
+    public void publishCompensationFailure(String sagaId, SagaStep sagaStep, String correlationId, String error) {
+        sagaReplyPort.publishFailure(sagaId, sagaStep, correlationId, error);
     }
 
     private TaxInvoicePdfDocument requireDocument(UUID documentId) {
@@ -178,14 +162,15 @@ public class TaxInvoicePdfDocumentService {
     }
 
     private TaxInvoicePdfGeneratedEvent buildGeneratedEvent(TaxInvoicePdfDocument doc,
-                                                             KafkaTaxInvoiceProcessCommand command) {
+                                                             String sagaId, String documentId,
+                                                             String documentNumber, String correlationId) {
         return new TaxInvoicePdfGeneratedEvent(
-                command.getSagaId(),
-                command.getDocumentId(),
-                doc.getTaxInvoiceNumber(),
+                sagaId,
+                documentId,
+                documentNumber,
                 doc.getDocumentUrl(),
                 doc.getFileSize(),
                 doc.isXmlEmbedded(),
-                command.getCorrelationId());
+                correlationId);
     }
 }

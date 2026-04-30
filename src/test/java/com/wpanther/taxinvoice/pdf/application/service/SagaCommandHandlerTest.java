@@ -4,12 +4,12 @@ import com.wpanther.saga.domain.enums.SagaStep;
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfStoragePort;
 import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.pdf.application.port.out.SignedXmlFetchPort;
-import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
-import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceCompensateCommand;
-import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.KafkaTaxInvoiceProcessCommand;
+import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService;
 import com.wpanther.taxinvoice.pdf.domain.service.TaxInvoicePdfGenerationService.TaxInvoicePdfGenerationException;
+import com.wpanther.taxinvoice.pdf.infrastructure.adapter.in.kafka.SagaCommandHandler;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,294 +22,227 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
+/**
+ * Unit tests for {@link SagaCommandHandler} in its new location
+ * (infrastructure/adapter/in/kafka).
+ */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("SagaCommandHandler Unit Tests")
 class SagaCommandHandlerTest {
 
-    @Mock
-    private TaxInvoicePdfDocumentService pdfDocumentService;
-
-    @Mock
-    private TaxInvoicePdfGenerationService pdfGenerationService;
-
-    @Mock
-    private PdfStoragePort pdfStoragePort;
-
-    @Mock
-    private SagaReplyPort sagaReplyPort;
-
-    @Mock
-    private SignedXmlFetchPort signedXmlFetchPort;
-
-    // Note: Using reflection to instantiate because Lombok @RequiredArgsConstructor
-    // is scope=provided, not available during test compilation
-    private SagaCommandHandler getHandler() {
-        try {
-            return SagaCommandHandler.class
-                    .getDeclaredConstructor(TaxInvoicePdfDocumentService.class,
-                                           TaxInvoicePdfGenerationService.class,
-                                           PdfStoragePort.class,
-                                           SagaReplyPort.class,
-                                           SignedXmlFetchPort.class,
-                                           int.class)
-                    .newInstance(pdfDocumentService, pdfGenerationService, pdfStoragePort,
-                                 sagaReplyPort, signedXmlFetchPort, 3);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to instantiate SagaCommandHandler", e);
-        }
-    }
-
+    private static final String DOC_ID         = "doc-123";
+    private static final String DOC_NUMBER     = "TXINV-2024-001";
+    private static final String SAGA_ID        = "saga-001";
+    private static final String CORR_ID        = "corr-456";
+    private static final SagaStep SAGA_STEP    = SagaStep.GENERATE_TAX_INVOICE_PDF;
     private static final String SIGNED_XML_URL = "http://minio:9000/signed/taxinvoice-signed.xml";
     private static final String SIGNED_XML_CONTENT = "<TaxInvoice>signed</TaxInvoice>";
+    private static final String S3_KEY         = "2024/01/15/taxinvoice-TXINV-2024-001-uuid.pdf";
+    private static final String FILE_URL       = "http://localhost:9000/taxinvoices/" + S3_KEY;
 
-    private KafkaTaxInvoiceProcessCommand createProcessCommand() {
-        return new KafkaTaxInvoiceProcessCommand(
-                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123", "TXINV-2024-001",
-                SIGNED_XML_URL
-        );
+    @Mock private TaxInvoicePdfDocumentService pdfDocumentService;
+    @Mock private TaxInvoicePdfGenerationService pdfGenerationService;
+    @Mock private PdfStoragePort pdfStoragePort;
+    @Mock private SagaReplyPort sagaReplyPort;
+    @Mock private SignedXmlFetchPort signedXmlFetchPort;
+
+    private SagaCommandHandler sagaCommandHandler;
+
+    @BeforeEach
+    void setUp() {
+        sagaCommandHandler = new SagaCommandHandler(
+                pdfDocumentService, pdfGenerationService,
+                pdfStoragePort, sagaReplyPort, signedXmlFetchPort, 3);
     }
 
-    private KafkaTaxInvoiceCompensateCommand createCompensateCommand() {
-        return new KafkaTaxInvoiceCompensateCommand(
-                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123"
-        );
-    }
-
-    private TaxInvoicePdfDocument createCompletedDocument() {
-        TaxInvoicePdfDocument doc = TaxInvoicePdfDocument.builder()
+    private TaxInvoicePdfDocument generatingDoc() {
+        return TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
-                .taxInvoiceId("doc-123")
-                .taxInvoiceNumber("TXINV-2024-001")
-                .status(GenerationStatus.COMPLETED)
-                .documentPath("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf")
-                .documentUrl("http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf")
-                .fileSize(12345L)
-                .build();
-        return doc;
-    }
-
-    @Test
-    @DisplayName("handle() process command: generates PDF and publishes SUCCESS")
-    void testHandleProcessCommand_Success() throws Exception {
-        // Given
-        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
-        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
-
-        TaxInvoicePdfDocument generatingDoc = TaxInvoicePdfDocument.builder()
-                .id(UUID.randomUUID())
-                .taxInvoiceId("doc-123")
-                .taxInvoiceNumber("TXINV-2024-001")
+                .taxInvoiceId(DOC_ID)
+                .taxInvoiceNumber(DOC_NUMBER)
                 .status(GenerationStatus.GENERATING)
+                .retryCount(0)
                 .build();
-        when(pdfDocumentService.beginGeneration("doc-123", "TXINV-2024-001"))
-                .thenReturn(generatingDoc);
+    }
 
+    private TaxInvoicePdfDocument completedDoc() {
+        return TaxInvoicePdfDocument.builder()
+                .id(UUID.randomUUID())
+                .taxInvoiceId(DOC_ID)
+                .taxInvoiceNumber(DOC_NUMBER)
+                .status(GenerationStatus.COMPLETED)
+                .documentPath(S3_KEY)
+                .documentUrl(FILE_URL)
+                .fileSize(12345L)
+                .xmlEmbedded(true)
+                .retryCount(0)
+                .build();
+    }
+
+    // -------------------------------------------------------------------------
+    // Happy path
+    // -------------------------------------------------------------------------
+
+    @Test
+    @DisplayName("handle(process): success — beginGeneration → fetch → generate → upload → completeGenerationAndPublish")
+    void testHandleProcessCommand_Success() throws Exception {
         byte[] pdfBytes = new byte[5000];
-        when(pdfGenerationService.generatePdf(anyString(), anyString()))
-                .thenReturn(pdfBytes);
-        when(pdfStoragePort.store(anyString(), any(byte[].class)))
-                .thenReturn("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf");
-        when(pdfStoragePort.resolveUrl(anyString()))
-                .thenReturn("http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf");
+        TaxInvoicePdfDocument doc = generatingDoc();
 
-        // When
-        getHandler().handle(command);
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.empty());
+        when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
+        when(pdfGenerationService.generatePdf(anyString(), anyString())).thenReturn(pdfBytes);
+        when(pdfStoragePort.store(anyString(), any())).thenReturn(S3_KEY);
+        when(pdfStoragePort.resolveUrl(S3_KEY)).thenReturn(FILE_URL);
+        when(pdfDocumentService.beginGeneration(DOC_ID, DOC_NUMBER)).thenReturn(doc);
 
-        // Then
-        verify(pdfDocumentService).beginGeneration("doc-123", "TXINV-2024-001");
-        verify(pdfGenerationService).generatePdf("TXINV-2024-001", SIGNED_XML_CONTENT);
-        verify(pdfStoragePort).store("TXINV-2024-001", pdfBytes);
+        sagaCommandHandler.handle(DOC_ID, DOC_NUMBER, SIGNED_XML_URL, SAGA_ID, SAGA_STEP, CORR_ID);
+
+        verify(pdfDocumentService).beginGeneration(DOC_ID, DOC_NUMBER);
+        verify(pdfGenerationService).generatePdf(DOC_NUMBER, SIGNED_XML_CONTENT);
+        verify(pdfStoragePort).store(DOC_NUMBER, pdfBytes);
         verify(pdfDocumentService).completeGenerationAndPublish(
-                eq(generatingDoc.getId()),
-                eq("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf"),
-                eq("http://localhost:9000/taxinvoices/2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf"),
-                eq(5000L),
-                eq(-1),
-                eq(command)
-        );
+                eq(doc.getId()), eq(S3_KEY), eq(FILE_URL), eq(5000L), eq(-1),
+                eq(SAGA_ID), eq(SAGA_STEP), eq(CORR_ID), eq(DOC_ID), eq(DOC_NUMBER));
     }
 
     @Test
-    @DisplayName("handle() process command: idempotent SUCCESS for already completed document")
+    @DisplayName("handle(process): idempotent SUCCESS for already-completed document")
     void testHandleProcessCommand_AlreadyCompleted() {
-        // Given
-        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
-        TaxInvoicePdfDocument completedDoc = createCompletedDocument();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(completedDoc));
+        TaxInvoicePdfDocument doc = completedDoc();
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.of(doc));
 
-        // When
-        getHandler().handle(command);
+        sagaCommandHandler.handle(DOC_ID, DOC_NUMBER, SIGNED_XML_URL, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // Then
         verify(pdfDocumentService, never()).beginGeneration(anyString(), anyString());
-        verify(pdfDocumentService).publishIdempotentSuccess(completedDoc, command);
+        verify(pdfDocumentService).publishIdempotentSuccess(doc, SAGA_ID, SAGA_STEP, CORR_ID);
     }
 
     @Test
-    @DisplayName("handle() process command: FAILURE when max retries exceeded")
+    @DisplayName("handle(process): FAILURE when max retries exceeded")
     void testHandleProcessCommand_MaxRetriesExceeded() {
-        // Given
-        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         TaxInvoicePdfDocument failedDoc = TaxInvoicePdfDocument.builder()
                 .id(UUID.randomUUID())
-                .taxInvoiceId("doc-123")
-                .taxInvoiceNumber("TXINV-2024-001")
+                .taxInvoiceId(DOC_ID)
+                .taxInvoiceNumber(DOC_NUMBER)
                 .status(GenerationStatus.FAILED)
                 .retryCount(3)
                 .build();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(failedDoc));
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.of(failedDoc));
 
-        // When
-        getHandler().handle(command);
+        sagaCommandHandler.handle(DOC_ID, DOC_NUMBER, SIGNED_XML_URL, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // Then
-        verify(pdfDocumentService).publishRetryExhausted(command);
+        verify(pdfDocumentService).publishRetryExhausted(SAGA_ID, SAGA_STEP, CORR_ID, DOC_ID, DOC_NUMBER);
     }
 
     @Test
-    @DisplayName("handle() process command: FAILURE on signedXmlUrl validation")
+    @DisplayName("handle(process): FAILURE when signedXmlUrl is null")
     void testHandleProcessCommand_NullSignedXmlUrl() {
-        // Given
-        KafkaTaxInvoiceProcessCommand command = new KafkaTaxInvoiceProcessCommand(
-                "saga-001", SagaStep.GENERATE_TAX_INVOICE_PDF, "corr-456",
-                "doc-123", "TXINV-2024-001",
-                null);
+        sagaCommandHandler.handle(DOC_ID, DOC_NUMBER, null, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // When
-        getHandler().handle(command);
-
-        // Then
-        verify(pdfDocumentService).publishGenerationFailure(command, "signedXmlUrl is null or blank");
+        verify(pdfDocumentService).publishGenerationFailure(
+                eq(SAGA_ID), eq(SAGA_STEP), eq(CORR_ID), eq("signedXmlUrl is null or blank"));
     }
 
     @Test
-    @DisplayName("handle() process command: FAILURE on PDF generation failure")
+    @DisplayName("handle(process): FAILURE when PDF generation throws exception")
     void testHandleProcessCommand_GenerationFails() throws Exception {
-        // Given
-        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
+        TaxInvoicePdfDocument doc = generatingDoc();
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL)).thenReturn(SIGNED_XML_CONTENT);
-
-        TaxInvoicePdfDocument generatingDoc = TaxInvoicePdfDocument.builder()
-                .id(UUID.randomUUID())
-                .taxInvoiceId("doc-123")
-                .taxInvoiceNumber("TXINV-2024-001")
-                .status(GenerationStatus.GENERATING)
-                .build();
-        when(pdfDocumentService.beginGeneration("doc-123", "TXINV-2024-001"))
-                .thenReturn(generatingDoc);
-
+        when(pdfDocumentService.beginGeneration(DOC_ID, DOC_NUMBER)).thenReturn(doc);
         when(pdfGenerationService.generatePdf(anyString(), anyString()))
                 .thenThrow(new TaxInvoicePdfGenerationException("FOP failed"));
 
-        // When
-        getHandler().handle(command);
+        sagaCommandHandler.handle(DOC_ID, DOC_NUMBER, SIGNED_XML_URL, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // Then
         verify(pdfDocumentService).failGenerationAndPublish(
-                eq(generatingDoc.getId()),
+                eq(doc.getId()),
                 eq("TaxInvoicePdfGenerationException: FOP failed"),
                 eq(-1),
-                eq(command)
-        );
+                eq(SAGA_ID), eq(SAGA_STEP), eq(CORR_ID));
     }
 
     @Test
-    @DisplayName("handle() process command: FAILURE on circuit breaker open")
-    void testHandleProcessCommand_CircuitBreakerOpen() throws Exception {
-        // Given
-        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
+    @DisplayName("handle(process): FAILURE on circuit breaker open")
+    void testHandleProcessCommand_CircuitBreakerOpen() {
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.empty());
         when(signedXmlFetchPort.fetch(SIGNED_XML_URL))
                 .thenThrow(new RuntimeException("Circuit breaker open"));
 
-        // When
-        getHandler().handle(command);
+        sagaCommandHandler.handle(DOC_ID, DOC_NUMBER, SIGNED_XML_URL, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // Then - exception happens before document is created, so publishGenerationFailure is called
-        verify(pdfDocumentService).publishGenerationFailure(eq(command), anyString());
+        verify(pdfDocumentService).publishGenerationFailure(
+                eq(SAGA_ID), eq(SAGA_STEP), eq(CORR_ID), anyString());
     }
 
+    // -------------------------------------------------------------------------
+    // Compensation
+    // -------------------------------------------------------------------------
+
     @Test
-    @DisplayName("handle() compensate command: deletes document and publishes COMPENSATED")
+    @DisplayName("handle(compensate): deletes document and publishes COMPENSATED")
     void testHandleCompensation_Success() {
-        // Given
-        KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
-        TaxInvoicePdfDocument doc = createCompletedDocument();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(doc));
+        TaxInvoicePdfDocument doc = completedDoc();
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.of(doc));
 
-        // When
-        getHandler().handle(command);
+        sagaCommandHandler.handle(DOC_ID, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // Then
-        verify(pdfStoragePort).delete("2024/01/15/taxinvoice-TXINV-2024-001-abc.pdf");
+        verify(pdfStoragePort).delete(S3_KEY);
         verify(pdfDocumentService).deleteById(doc.getId());
-        verify(pdfDocumentService).publishCompensated(command);
+        verify(pdfDocumentService).publishCompensated(SAGA_ID, SAGA_STEP, CORR_ID);
     }
 
     @Test
-    @DisplayName("handle() compensate command: COMPENSATED even when document not found")
+    @DisplayName("handle(compensate): COMPENSATED even when document not found (idempotent)")
     void testHandleCompensation_NoDocumentFound() {
-        // Given
-        KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.empty());
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.empty());
 
-        // When
-        getHandler().handle(command);
+        sagaCommandHandler.handle(DOC_ID, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // Then
         verify(pdfStoragePort, never()).delete(anyString());
         verify(pdfDocumentService, never()).deleteById(any());
-        verify(pdfDocumentService).publishCompensated(command);
+        verify(pdfDocumentService).publishCompensated(SAGA_ID, SAGA_STEP, CORR_ID);
     }
 
     @Test
-    @DisplayName("handle() compensate command: publishes COMPENSATED even when storage deletion fails (storage errors are logged only)")
+    @DisplayName("handle(compensate): COMPENSATED even when MinIO deletion fails")
     void testHandleCompensation_StorageFailure() {
-        // Given
-        KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
-        TaxInvoicePdfDocument doc = createCompletedDocument();
-        when(pdfDocumentService.findByTaxInvoiceId("doc-123")).thenReturn(Optional.of(doc));
+        TaxInvoicePdfDocument doc = completedDoc();
+        when(pdfDocumentService.findByTaxInvoiceId(DOC_ID)).thenReturn(Optional.of(doc));
         doThrow(new RuntimeException("MinIO unavailable")).when(pdfStoragePort).delete(anyString());
 
-        // When
-        getHandler().handle(command);
+        sagaCommandHandler.handle(DOC_ID, SAGA_ID, SAGA_STEP, CORR_ID);
 
-        // Then - storage deletion failures are swallowed, compensation succeeds
         verify(pdfDocumentService).deleteById(doc.getId());
-        verify(pdfDocumentService).publishCompensated(command);
+        verify(pdfDocumentService).publishCompensated(SAGA_ID, SAGA_STEP, CORR_ID);
     }
 
+    // -------------------------------------------------------------------------
+    // DLQ failure handlers
+    // -------------------------------------------------------------------------
+
     @Test
-    @DisplayName("publishOrchestrationFailure() publishes failure for DLQ events")
+    @DisplayName("publishOrchestrationFailure() publishes FAILURE reply for DLQ events")
     void testPublishOrchestrationFailure() {
-        // Given
-        KafkaTaxInvoiceProcessCommand command = createProcessCommand();
         Throwable cause = new RuntimeException("DLQ error");
 
-        // When
-        getHandler().publishOrchestrationFailure(command, cause);
+        sagaCommandHandler.publishOrchestrationFailure(SAGA_ID, SAGA_STEP, CORR_ID, cause);
 
-        // Then
-        verify(sagaReplyPort).publishFailure(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF), eq("corr-456"),
+        verify(sagaReplyPort).publishFailure(
+                eq(SAGA_ID), eq(SAGA_STEP), eq(CORR_ID),
                 contains("Message routed to DLQ"));
     }
 
     @Test
-    @DisplayName("publishCompensationOrchestrationFailure() publishes failure for compensation DLQ")
+    @DisplayName("publishCompensationOrchestrationFailure() publishes FAILURE for compensation DLQ")
     void testPublishCompensationOrchestrationFailure() {
-        // Given
-        KafkaTaxInvoiceCompensateCommand command = createCompensateCommand();
         Throwable cause = new RuntimeException("Compensation DLQ error");
 
-        // When
-        getHandler().publishCompensationOrchestrationFailure(command, cause);
+        sagaCommandHandler.publishCompensationOrchestrationFailure(SAGA_ID, SAGA_STEP, CORR_ID, cause);
 
-        // Then
-        verify(sagaReplyPort).publishFailure(eq("saga-001"), eq(SagaStep.GENERATE_TAX_INVOICE_PDF), eq("corr-456"),
+        verify(sagaReplyPort).publishFailure(
+                eq(SAGA_ID), eq(SAGA_STEP), eq(CORR_ID),
                 contains("Compensation DLQ"));
     }
 }

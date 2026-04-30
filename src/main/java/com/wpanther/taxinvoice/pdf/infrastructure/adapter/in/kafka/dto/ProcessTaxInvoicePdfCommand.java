@@ -51,10 +51,4 @@ public class ProcessTaxInvoicePdfCommand extends SagaCommand {
         this.signedXmlUrl = Objects.requireNonNull(signedXmlUrl, "signedXmlUrl is required");
     }
 
-    @Override public String getSagaId()        { return super.getSagaId(); }
-    @Override public SagaStep getSagaStep()    { return super.getSagaStep(); }
-    @Override public String getCorrelationId() { return super.getCorrelationId(); }
-    public String getDocumentId()     { return documentId; }
-    public String getDocumentNumber() { return documentNumber; }
-    public String getSignedXmlUrl()   { return signedXmlUrl; }
-}
+    }

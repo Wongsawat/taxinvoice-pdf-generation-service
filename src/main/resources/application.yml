@@ -49,6 +49,7 @@ app:
       consumers-count: ${KAFKA_CONSUMERS_COUNT:3}
     topics:
       saga-command-tax-invoice-pdf: saga.command.tax-invoice-pdf
+      saga-reply-tax-invoice-pdf: saga.reply.tax-invoice-pdf
       saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf
       pdf-generated-tax-invoice: pdf.generated.tax-invoice
       dlq: pdf.generation.tax-invoice.dlq

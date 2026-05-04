@@ -1,6 +1,8 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
 import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.taxinvoice.pdf.application.dto.event.DocumentArchiveEvent;
+import com.wpanther.taxinvoice.pdf.application.port.out.DocumentArchivePort;
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
 import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.pdf.domain.model.TaxInvoicePdfDocument;
@@ -9,6 +11,7 @@ import com.wpanther.taxinvoice.pdf.application.dto.event.TaxInvoicePdfGeneratedE
 import com.wpanther.taxinvoice.pdf.infrastructure.metrics.PdfGenerationMetrics;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,14 +33,27 @@ import java.util.UUID;
  * TX2: completeGenerationAndPublish() / failGenerationAndPublish()</p>
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class TaxInvoicePdfDocumentService {
 
     private final TaxInvoicePdfDocumentRepository repository;
     private final PdfEventPort pdfEventPort;
     private final SagaReplyPort sagaReplyPort;
+    private final DocumentArchivePort documentArchivePort;
     private final PdfGenerationMetrics pdfGenerationMetrics;
+
+    @Autowired
+    public TaxInvoicePdfDocumentService(TaxInvoicePdfDocumentRepository repository,
+                                        PdfEventPort pdfEventPort,
+                                        SagaReplyPort sagaReplyPort,
+                                        DocumentArchivePort documentArchivePort,
+                                        PdfGenerationMetrics pdfGenerationMetrics) {
+        this.repository = repository;
+        this.pdfEventPort = pdfEventPort;
+        this.sagaReplyPort = sagaReplyPort;
+        this.documentArchivePort = documentArchivePort;
+        this.pdfGenerationMetrics = pdfGenerationMetrics;
+    }
 
     @Transactional(readOnly = true)
     public Optional<TaxInvoicePdfDocument> findByTaxInvoiceId(String taxInvoiceId) {
@@ -81,6 +97,19 @@ public class TaxInvoicePdfDocumentService {
         doc.markXmlEmbedded();
         applyRetryCount(doc, previousRetryCount);
         doc = repository.save(doc);
+
+        // Emit document.archive for unsigned PDF archival
+        documentArchivePort.publish(new DocumentArchiveEvent(
+                documentIdParam,
+                doc.getTaxInvoiceNumber(),
+                "TAX_INVOICE",
+                "UNSIGNED_PDF",
+                doc.getDocumentUrl(),
+                doc.getTaxInvoiceNumber() + ".pdf",
+                doc.getMimeType(),
+                doc.getFileSize(),
+                sagaId,
+                correlationId));
 
         pdfEventPort.publishPdfGenerated(buildGeneratedEvent(doc, sagaId, documentIdParam, documentNumber, correlationId));
         sagaReplyPort.publishSuccess(sagaId, sagaStep, correlationId, doc.getDocumentUrl(), doc.getFileSize());

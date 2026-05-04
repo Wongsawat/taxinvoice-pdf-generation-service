@@ -1,6 +1,8 @@
 package com.wpanther.taxinvoice.pdf.application.service;
 
 import com.wpanther.saga.domain.enums.SagaStep;
+import com.wpanther.taxinvoice.pdf.application.dto.event.DocumentArchiveEvent;
+import com.wpanther.taxinvoice.pdf.application.port.out.DocumentArchivePort;
 import com.wpanther.taxinvoice.pdf.application.port.out.PdfEventPort;
 import com.wpanther.taxinvoice.pdf.application.port.out.SagaReplyPort;
 import com.wpanther.taxinvoice.pdf.domain.model.GenerationStatus;
@@ -46,10 +48,13 @@ class TaxInvoicePdfDocumentServiceTest {
     private SagaReplyPort sagaReplyPort;
 
     @Mock
+    private DocumentArchivePort documentArchivePort;
+
+    @Mock
     private PdfGenerationMetrics pdfGenerationMetrics;
 
     private TaxInvoicePdfDocumentService getService() {
-        return new TaxInvoicePdfDocumentService(repository, pdfEventPort, sagaReplyPort, pdfGenerationMetrics);
+        return new TaxInvoicePdfDocumentService(repository, pdfEventPort, sagaReplyPort, documentArchivePort, pdfGenerationMetrics);
     }
 
     private TaxInvoicePdfDocument createCompletedDocument() {
@@ -204,6 +209,14 @@ class TaxInvoicePdfDocumentServiceTest {
         verify(pdfEventPort).publishPdfGenerated(any(TaxInvoicePdfGeneratedEvent.class));
         verify(sagaReplyPort).publishSuccess(SAGA_ID, SAGA_STEP, CORR_ID,
                 "http://localhost:9000/taxinvoices/test.pdf", 5000L);
+
+        // Verify document.archive emission
+        ArgumentCaptor<DocumentArchiveEvent> archiveCaptor = ArgumentCaptor.forClass(DocumentArchiveEvent.class);
+        verify(documentArchivePort).publish(archiveCaptor.capture());
+        DocumentArchiveEvent archiveEvent = archiveCaptor.getValue();
+        assertThat(archiveEvent.getDocumentId()).isEqualTo(DOC_ID);
+        assertThat(archiveEvent.getArtifactType()).isEqualTo("UNSIGNED_PDF");
+        assertThat(archiveEvent.getSourceUrl()).isEqualTo("http://localhost:9000/taxinvoices/test.pdf");
     }
 
     @Test

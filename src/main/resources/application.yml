@@ -53,6 +53,7 @@ app:
       saga-compensation-tax-invoice-pdf: saga.compensation.tax-invoice-pdf
       pdf-generated-tax-invoice: pdf.generated.tax-invoice
       dlq: pdf.generation.tax-invoice.dlq
+      document-archive: document.archive
   minio:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:minioadmin}

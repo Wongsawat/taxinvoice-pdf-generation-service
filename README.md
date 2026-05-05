@@ -97,6 +97,7 @@ com.wpanther.taxinvoice.pdf/
 | `saga.reply.tax-invoice-pdf` | Produce (outbox) | SUCCESS/FAILURE/COMPENSATED reply |
 | `pdf.generated.tax-invoice` | Produce (outbox) | For Notification Service |
 | `pdf.generation.tax-invoice.dlq` | Produce | Dead letter queue |
+| `document.archive` | Produce (outbox) | Fire-and-forget archival (UNSIGNED_PDF stored by document-storage-service) |
 
 ## Configuration
 
